@@ -31,6 +31,14 @@ export type Node = {
   onlineTime?: string;
 };
 
+export type Request = {
+  broker: string;
+  requestId: string;
+  db: string;
+  sql: string;
+  start: number;
+};
+
 export enum ShardStateType {
   UnknownShard = 0,
   NewShard = 1,
@@ -72,6 +80,22 @@ export type ReplicaState = {
       consume: number; //next consume idx
       ack: number;
       pending: number;
+    }[];
+  }[];
+};
+
+export type MemoryDatabaseState = {
+  [node: string]: {
+    shardId: number;
+    familyTime: string;
+    ackSequences: { [leader: number]: number }; // leader=>ack sequence
+    replicaSequences: { [leader: number]: number }; // leader=>replica sequence
+    memoryDatabases: {
+      State: string; // memory database state
+      uptime: number; // uptime
+      memSize: number;
+      numOfMetrics: number;
+      numOfSeries: number;
     }[];
   }[];
 };

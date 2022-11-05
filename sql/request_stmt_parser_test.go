@@ -15,25 +15,22 @@
 // specific language governing permissions and limitations
 // under the License.
 
-//go:build windows
-
-package memdb
+package sql
 
 import (
-	"github.com/lindb/lindb/pkg/fileutil"
-	"github.com/lindb/lindb/pkg/logger"
+	"testing"
+
+	"github.com/stretchr/testify/assert"
+
+	"github.com/lindb/lindb/sql/stmt"
 )
 
-var (
-	unmapFunc = fileutil.Unmap
-)
+func TestRequestStmt(t *testing.T) {
+	q, err := Parse("show requests")
+	assert.NoError(t, err)
+	assert.Equal(t, &stmt.Request{}, q)
 
-// closeBuffer just closes file and unmap file.
-func (d *dataPointBuffer) closeBuffer() {
-	for i, buf := range d.buf {
-		if err := unmapFunc(d.files[i], buf); err != nil {
-			memDBLogger.Error("unmap file in memory database err",
-				logger.String("file", d.path), logger.Error(err))
-		}
-	}
+	q, err = Parse("show request where id='xxx'")
+	assert.NoError(t, err)
+	assert.Equal(t, &stmt.Request{RequestID: "xxx"}, q)
 }

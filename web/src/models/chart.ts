@@ -16,7 +16,15 @@ KIND, either express or implied.  See the License for the
 specific language governing permissions and limitations
 under the License.
 */
-import { Chart, ChartArea } from "chart.js/auto";
+import { Chart, ChartArea } from "chart.js";
+
+export enum LegendAggregateType {
+  MAX = "max",
+  MIN = "min",
+  AVG = "avg",
+  TOTAL = "total",
+  CURRENT = "current",
+}
 
 export type MouseMoveEvent = {
   index: number;
@@ -28,6 +36,14 @@ export type MouseMoveEvent = {
   nativeEvent: MouseEvent;
 };
 
+export enum MetricStatus {
+  Init = "init",
+  Loading = "loading",
+  OK = "ok",
+  Empty = "empty",
+  Error = "error",
+}
+
 export enum ChartStatus {
   Init = "init",
   Loading = "loading",
@@ -35,6 +51,7 @@ export enum ChartStatus {
   Empty = "empty",
   Error = "error",
 }
+
 export enum ChartType {
   Line = "line",
   Area = "area",
@@ -45,15 +62,11 @@ export type ChartConfig = {
   description?: string;
   config?: any;
   timeShift?: string;
-  targets?: Target[];
-  unit?: UnitEnum;
+  targets?: Query[];
+  unit?: Unit;
 };
 
-export enum ChartTypeEnum {
-  Line = "line",
-}
-
-export enum UnitEnum {
+export enum Unit {
   None = "none",
   Short = "short",
   Bytes = "bytes",
@@ -64,6 +77,13 @@ export enum UnitEnum {
   Milliseconds = "milliseconds(ms)",
   Nanoseconds = "nanoseconds(ns)",
 }
+
+export type Query = {
+  db?: string;
+  sql: string | QueryStatement;
+  bind?: boolean;
+  watch?: string[];
+};
 
 export type Target = {
   db?: string;

@@ -23,18 +23,30 @@ import "@src/styles/index.scss";
 import en_US from "@douyinfe/semi-ui/lib/es/locale/source/en_US";
 import { LocaleProvider } from "@douyinfe/semi-ui";
 import { HashRouter as Router, Route, Switch } from "react-router-dom";
+import { UIContextProvider } from "@src/context";
+import { QueryClientProvider, QueryClient } from "@tanstack/react-query";
 
-// set sima drak theme
-const body = document.body;
-body.setAttribute("theme-mode", "dark");
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      retry: false,
+      refetchOnWindowFocus: false,
+      cacheTime: 0,
+    },
+  },
+});
 
 ReactDOM.render(
   <LocaleProvider locale={en_US}>
-    <Router>
-      <Switch>
-        <Route path="/" component={App} />
-      </Switch>
-    </Router>
+    <QueryClientProvider client={queryClient}>
+      <UIContextProvider>
+        <Router>
+          <Switch>
+            <Route path="/" component={App} />
+          </Switch>
+        </Router>
+      </UIContextProvider>
+    </QueryClientProvider>
   </LocaleProvider>,
   document.getElementById("root") as HTMLElement
 );

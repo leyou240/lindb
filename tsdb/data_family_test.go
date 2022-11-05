@@ -26,6 +26,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"go.uber.org/atomic"
 
+	"github.com/lindb/common/pkg/fasttime"
 	protoMetricsV1 "github.com/lindb/common/proto/gen/v1/linmetrics"
 
 	"github.com/lindb/lindb/config"
@@ -37,6 +38,7 @@ import (
 	"github.com/lindb/lindb/models"
 	"github.com/lindb/lindb/pkg/logger"
 	"github.com/lindb/lindb/pkg/ltoml"
+	"github.com/lindb/lindb/pkg/option"
 	"github.com/lindb/lindb/pkg/timeutil"
 	"github.com/lindb/lindb/series/metric"
 	stmtpkg "github.com/lindb/lindb/sql/stmt"
@@ -64,7 +66,7 @@ func TestDataFamily_BaseTime(t *testing.T) {
 	shard := NewMockShard(ctrl)
 	shard.EXPECT().Database().Return(database)
 	shard.EXPECT().ShardID().Return(models.ShardID(1))
-	dataFamily := newDataFamily(shard, timeutil.Interval(timeutil.OneSecond*10), timeRange, 10, family)
+	dataFamily := newDataFamily(shard, nil, timeutil.Interval(timeutil.OneSecond*10), timeRange, 10, family)
 	assert.Equal(t, timeRange, dataFamily.TimeRange())
 	assert.Equal(t, timeutil.Interval(10000), dataFamily.Interval())
 	assert.NotNil(t, dataFamily.Family())
@@ -123,14 +125,14 @@ func TestDataFamily_Filter(t *testing.T) {
 		},
 		{
 			name: "get file reader failure",
-			prepare: func(f *dataFamily) {
+			prepare: func(_ *dataFamily) {
 				snapshot.EXPECT().FindReaders(gomock.Any()).Return(nil, fmt.Errorf("err"))
 			},
 			wantErr: true,
 		},
 		{
 			name: "get metric reader data failure",
-			prepare: func(f *dataFamily) {
+			prepare: func(_ *dataFamily) {
 				snapshot.EXPECT().FindReaders(gomock.Any()).Return([]table.Reader{reader}, nil)
 				reader.EXPECT().Get(gomock.Any()).Return(nil, fmt.Errorf("err"))
 			},
@@ -139,7 +141,7 @@ func TestDataFamily_Filter(t *testing.T) {
 		},
 		{
 			name: "new metric reader failure",
-			prepare: func(f *dataFamily) {
+			prepare: func(_ *dataFamily) {
 				snapshot.EXPECT().FindReaders(gomock.Any()).Return([]table.Reader{reader}, nil)
 				reader.EXPECT().Get(gomock.Any()).Return([]byte{1, 2, 3}, nil)
 				newReaderFunc = func(path string, metricBlock []byte) (metricsdata.MetricReader, error) {
@@ -150,7 +152,7 @@ func TestDataFamily_Filter(t *testing.T) {
 		},
 		{
 			name: "time range not match",
-			prepare: func(f *dataFamily) {
+			prepare: func(_ *dataFamily) {
 				snapshot.EXPECT().FindReaders(gomock.Any()).Return([]table.Reader{reader}, nil)
 				reader.EXPECT().Get(gomock.Any()).Return([]byte{1, 2, 3}, nil)
 				mReader := metricsdata.NewMockMetricReader(ctrl)
@@ -164,7 +166,7 @@ func TestDataFamily_Filter(t *testing.T) {
 		},
 		{
 			name: "find data",
-			prepare: func(f *dataFamily) {
+			prepare: func(_ *dataFamily) {
 				snapshot.EXPECT().FindReaders(gomock.Any()).Return([]table.Reader{reader}, nil)
 				reader.EXPECT().Get(gomock.Any()).Return([]byte{1, 2, 3}, nil)
 				mReader := metricsdata.NewMockMetricReader(ctrl)
@@ -192,8 +194,9 @@ func TestDataFamily_Filter(t *testing.T) {
 				newFilterFunc = metricsdata.NewFilter
 			}()
 			f := &dataFamily{
-				familyTime: now,
-				family:     family,
+				familyTime:   now,
+				family:       family,
+				lastReadTime: atomic.NewInt64(fasttime.UnixMilliseconds()),
 			}
 			if tt.prepare != nil {
 				tt.prepare(f)
@@ -250,7 +253,7 @@ func TestDataFamily_NeedFlush(t *testing.T) {
 			prepare: func(f *dataFamily) {
 				memDB := memdb.NewMockMemoryDatabase(ctrl)
 				f.mutableMemDB = memDB
-				memDB.EXPECT().Size().Return(0)
+				memDB.EXPECT().NumOfMetrics().Return(0)
 			},
 			needFlush: false,
 		},
@@ -263,7 +266,7 @@ func TestDataFamily_NeedFlush(t *testing.T) {
 				memDB := memdb.NewMockMemoryDatabase(ctrl)
 				f.mutableMemDB = memDB
 				memDB.EXPECT().MemSize().Return(int64(10))
-				memDB.EXPECT().Size().Return(10)
+				memDB.EXPECT().NumOfMetrics().Return(10)
 				memDB.EXPECT().Uptime().Return(time.Duration(timeutil.Now() - timeutil.OneMinute)).MaxTimes(2)
 			},
 			needFlush: true,
@@ -277,7 +280,7 @@ func TestDataFamily_NeedFlush(t *testing.T) {
 				config.SetGlobalStorageConfig(cfg)
 				memDB := memdb.NewMockMemoryDatabase(ctrl)
 				f.mutableMemDB = memDB
-				memDB.EXPECT().Size().Return(10)
+				memDB.EXPECT().NumOfMetrics().Return(10)
 				memDB.EXPECT().Uptime().Return(time.Duration(timeutil.Now() - timeutil.OneMinute)).MaxTimes(2)
 				memDB.EXPECT().MemSize().Return(int64(1000)).MaxTimes(2)
 			},
@@ -292,7 +295,7 @@ func TestDataFamily_NeedFlush(t *testing.T) {
 				config.SetGlobalStorageConfig(cfg)
 				memDB := memdb.NewMockMemoryDatabase(ctrl)
 				f.mutableMemDB = memDB
-				memDB.EXPECT().Size().Return(10)
+				memDB.EXPECT().NumOfMetrics().Return(10)
 				memDB.EXPECT().Uptime().Return(time.Duration(timeutil.Now() - timeutil.OneMinute)).MaxTimes(2)
 				memDB.EXPECT().MemSize().Return(int64(10)).MaxTimes(2)
 			},
@@ -346,7 +349,7 @@ func TestDataFamily_Flush(t *testing.T) {
 			name: "create data flusher failure",
 			prepare: func(f *dataFamily) {
 				memDB := memdb.NewMockMemoryDatabase(ctrl)
-				memDB.EXPECT().Size().Return(100)
+				memDB.EXPECT().NumOfMetrics().Return(100)
 				memDB.EXPECT().MarkReadOnly()
 				f.mutableMemDB = memDB
 				newMetricDataFlusher = func(kvFlusher kv.Flusher) (metricsdata.Flusher, error) {
@@ -359,7 +362,7 @@ func TestDataFamily_Flush(t *testing.T) {
 			name: "flush successfully",
 			prepare: func(f *dataFamily) {
 				memDB := memdb.NewMockMemoryDatabase(ctrl)
-				memDB.EXPECT().Size().Return(100)
+				memDB.EXPECT().NumOfMetrics().Return(100)
 				memDB.EXPECT().MarkReadOnly()
 				memDB.EXPECT().FlushFamilyTo(gomock.Any()).Return(nil)
 				memDB.EXPECT().Close().Return(nil)
@@ -376,7 +379,7 @@ func TestDataFamily_Flush(t *testing.T) {
 			name: "flush metric data failure",
 			prepare: func(f *dataFamily) {
 				memDB := memdb.NewMockMemoryDatabase(ctrl)
-				memDB.EXPECT().Size().Return(100)
+				memDB.EXPECT().NumOfMetrics().Return(100)
 				memDB.EXPECT().MarkReadOnly()
 				memDB.EXPECT().FlushFamilyTo(gomock.Any()).Return(fmt.Errorf("err"))
 				memDB.EXPECT().MemSize()
@@ -392,7 +395,7 @@ func TestDataFamily_Flush(t *testing.T) {
 			name: "flush successfully, but close memory database failure",
 			prepare: func(f *dataFamily) {
 				memDB := memdb.NewMockMemoryDatabase(ctrl)
-				memDB.EXPECT().Size().Return(100)
+				memDB.EXPECT().NumOfMetrics().Return(100)
 				memDB.EXPECT().MarkReadOnly()
 				memDB.EXPECT().FlushFamilyTo(gomock.Any()).Return(nil)
 				memDB.EXPECT().Close().Return(fmt.Errorf("err"))
@@ -570,11 +573,11 @@ func TestDataFamily_Sequence(t *testing.T) {
 	assert.True(t, f.ValidateSequence(2, 10))
 	assert.False(t, f.ValidateSequence(1, 5))
 	c := 0
-	f.AckSequence(2, func(seq int64) {
+	f.AckSequence(2, func(_ int64) {
 		c++
 	})
 	assert.Equal(t, 0, c)
-	f.AckSequence(1, func(seq int64) {
+	f.AckSequence(1, func(_ int64) {
 		c++
 	})
 	assert.Equal(t, 1, c)
@@ -710,12 +713,14 @@ func TestDataFamily_GetState(t *testing.T) {
 	shard := NewMockShard(ctrl)
 	shard.EXPECT().ShardID().Return(models.ShardID(1))
 	db := memdb.NewMockMemoryDatabase(ctrl)
-	db.EXPECT().Size().Return(10).MaxTimes(2)
+	db.EXPECT().NumOfMetrics().Return(10).MaxTimes(2)
+	db.EXPECT().NumOfSeries().Return(100).MaxTimes(2)
 	db.EXPECT().MemSize().Return(int64(10)).MaxTimes(2)
 	db.EXPECT().Uptime().Return(time.Duration(10)).MaxTimes(2)
+	now := timeutil.Now()
 	f := &dataFamily{
 		shard:          shard,
-		familyTime:     10,
+		familyTime:     now,
 		mutableMemDB:   db,
 		immutableMemDB: db,
 		seq:            map[int32]atomic.Int64{10: *atomic.NewInt64(10)},
@@ -725,20 +730,118 @@ func TestDataFamily_GetState(t *testing.T) {
 	state := f.GetState()
 	assert.Equal(t, models.DataFamilyState{
 		ShardID:          models.ShardID(1),
-		FamilyTime:       10,
+		FamilyTime:       timeutil.FormatTimestamp(now, timeutil.DataTimeFormat2),
 		AckSequences:     map[int32]int64{10: 10},
 		ReplicaSequences: map[int32]int64{10: 10},
 		MemoryDatabases: []models.MemoryDatabaseState{
 			{
-				State:       "immutable",
-				Uptime:      time.Duration(10),
-				MemSize:     10,
-				NumOfMetric: 10,
+				State:        "immutable",
+				Uptime:       time.Duration(10),
+				MemSize:      10,
+				NumOfMetrics: 10,
+				NumOfSeries:  100,
 			}, {
-				State:       "mutable",
-				Uptime:      time.Duration(10),
-				MemSize:     10,
-				NumOfMetric: 10,
+				State:        "mutable",
+				Uptime:       time.Duration(10),
+				MemSize:      10,
+				NumOfMetrics: 10,
+				NumOfSeries:  100,
 			}},
 	}, state)
+}
+
+func TestDataFamily_Compact(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	f := &dataFamily{
+		lastFlushTime: fasttime.UnixMilliseconds(),
+		mutableMemDB:  memdb.NewMockMemoryDatabase(ctrl),
+	}
+	f.Compact()
+
+	f.mutableMemDB = nil
+	f.lastFlushTime = fasttime.UnixMilliseconds() - 2*timeutil.OneHour - 5*timeutil.OneMinute
+	kvFamily := kv.NewMockFamily(ctrl)
+	f.family = kvFamily
+	kvFamily.EXPECT().Compact()
+	f.Compact()
+}
+
+func TestDataFamily_Evict(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+	shard := NewMockShard(ctrl)
+	db := NewMockDatabase(ctrl)
+	shard.EXPECT().Database().Return(db).AnyTimes()
+	opt := &option.DatabaseOption{Ahead: "1h", Behind: "1h"}
+	db.EXPECT().GetOption().Return(opt).AnyTimes()
+	segment := NewMockSegment(ctrl)
+	segment.EXPECT().EvictFamily(gomock.Any()).AnyTimes()
+
+	cases := []struct {
+		name    string
+		prepare func(f *dataFamily)
+	}{
+		{
+			name: "family write data",
+			prepare: func(f *dataFamily) {
+				f.Retain()
+			},
+		},
+		{
+			name: "family has mem database",
+			prepare: func(f *dataFamily) {
+				f.Retain()
+				f.Release()
+				f.mutableMemDB = memdb.NewMockMemoryDatabase(ctrl)
+			},
+		},
+		{
+			name: "family time in write time range",
+			prepare: func(f *dataFamily) {
+				f.familyTime = timeutil.Now()
+				f.familyTime = f.familyTime - 6*timeutil.OneHour - timeutil.OneMinute
+			},
+		},
+		{
+			name: "family time expire",
+			prepare: func(f *dataFamily) {
+				f.familyTime = timeutil.Now()
+				f.familyTime = f.familyTime - 7*timeutil.OneHour - timeutil.OneMinute
+				f.lastReadTime.Store(timeutil.Now() - 3*timeutil.OneHour - timeutil.OneMinute)
+			},
+		},
+		{
+			name: "family time expire, but close family failure",
+			prepare: func(f *dataFamily) {
+				f.familyTime = timeutil.Now()
+				f.familyTime = f.familyTime - 7*timeutil.OneHour - timeutil.OneMinute
+				f.lastReadTime.Store(timeutil.Now() - 3*timeutil.OneHour - timeutil.OneMinute)
+				closeFamilyFunc = func(_ *dataFamily) error {
+					return fmt.Errorf("err")
+				}
+			},
+		},
+	}
+
+	for _, tt := range cases {
+		tt := tt
+		t.Run(tt.name, func(_ *testing.T) {
+			defer func() {
+				closeFamilyFunc = closeFamily
+			}()
+			f := &dataFamily{
+				shard:        shard,
+				segment:      segment,
+				lastReadTime: atomic.NewInt64(fasttime.UnixMilliseconds()),
+				statistics:   metrics.NewFamilyStatistics("data", "1"),
+				logger:       logger.GetLogger("TSDB", "Test"),
+			}
+			if tt.prepare != nil {
+				tt.prepare(f)
+			}
+			f.Evict()
+		})
+	}
 }

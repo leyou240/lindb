@@ -15,10 +15,10 @@
 // specific language governing permissions and limitations
 // under the License.
 
-// Code generated from /Users/huangjie/go/src/github.com/lindb/lindb/sql/grammar/SQL.g4 by ANTLR 4.10.1. DO NOT EDIT.
+// Code generated from java-escape by ANTLR 4.11.1. DO NOT EDIT.
 
 package grammar // SQL
-import "github.com/antlr/antlr4/runtime/Go/antlr"
+import "github.com/antlr/antlr4/runtime/Go/antlr/v4"
 
 // SQLListener is a complete listener for a parse tree produced by SQLParser.
 type SQLListener interface {
@@ -35,6 +35,12 @@ type SQLListener interface {
 
 	// EnterShowMasterStmt is called when entering the showMasterStmt production.
 	EnterShowMasterStmt(c *ShowMasterStmtContext)
+
+	// EnterShowRequestsStmt is called when entering the showRequestsStmt production.
+	EnterShowRequestsStmt(c *ShowRequestsStmtContext)
+
+	// EnterShowRequestStmt is called when entering the showRequestStmt production.
+	EnterShowRequestStmt(c *ShowRequestStmtContext)
 
 	// EnterShowStoragesStmt is called when entering the showStoragesStmt production.
 	EnterShowStoragesStmt(c *ShowStoragesStmtContext)
@@ -56,6 +62,9 @@ type SQLListener interface {
 
 	// EnterShowReplicationStmt is called when entering the showReplicationStmt production.
 	EnterShowReplicationStmt(c *ShowReplicationStmtContext)
+
+	// EnterShowMemoryDatabaseStmt is called when entering the showMemoryDatabaseStmt production.
+	EnterShowMemoryDatabaseStmt(c *ShowMemoryDatabaseStmtContext)
 
 	// EnterShowBrokerMetricStmt is called when entering the showBrokerMetricStmt production.
 	EnterShowBrokerMetricStmt(c *ShowBrokerMetricStmtContext)
@@ -104,6 +113,9 @@ type SQLListener interface {
 
 	// EnterDatabaseName is called when entering the databaseName production.
 	EnterDatabaseName(c *DatabaseNameContext)
+
+	// EnterRequestID is called when entering the requestID production.
+	EnterRequestID(c *RequestIDContext)
 
 	// EnterSource is called when entering the source production.
 	EnterSource(c *SourceContext)
@@ -285,6 +297,12 @@ type SQLListener interface {
 	// ExitShowMasterStmt is called when exiting the showMasterStmt production.
 	ExitShowMasterStmt(c *ShowMasterStmtContext)
 
+	// ExitShowRequestsStmt is called when exiting the showRequestsStmt production.
+	ExitShowRequestsStmt(c *ShowRequestsStmtContext)
+
+	// ExitShowRequestStmt is called when exiting the showRequestStmt production.
+	ExitShowRequestStmt(c *ShowRequestStmtContext)
+
 	// ExitShowStoragesStmt is called when exiting the showStoragesStmt production.
 	ExitShowStoragesStmt(c *ShowStoragesStmtContext)
 
@@ -305,6 +323,9 @@ type SQLListener interface {
 
 	// ExitShowReplicationStmt is called when exiting the showReplicationStmt production.
 	ExitShowReplicationStmt(c *ShowReplicationStmtContext)
+
+	// ExitShowMemoryDatabaseStmt is called when exiting the showMemoryDatabaseStmt production.
+	ExitShowMemoryDatabaseStmt(c *ShowMemoryDatabaseStmtContext)
 
 	// ExitShowBrokerMetricStmt is called when exiting the showBrokerMetricStmt production.
 	ExitShowBrokerMetricStmt(c *ShowBrokerMetricStmtContext)
@@ -353,6 +374,9 @@ type SQLListener interface {
 
 	// ExitDatabaseName is called when exiting the databaseName production.
 	ExitDatabaseName(c *DatabaseNameContext)
+
+	// ExitRequestID is called when exiting the requestID production.
+	ExitRequestID(c *RequestIDContext)
 
 	// ExitSource is called when exiting the source production.
 	ExitSource(c *SourceContext)

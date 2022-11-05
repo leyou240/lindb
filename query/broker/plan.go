@@ -54,12 +54,12 @@ func newBrokerPlan(
 }
 
 // Plan plans broker level query execute plan, there are some scenarios as below:
-// 1. parse sql => stmt
-// 2. build parallel exec tree
-//    a. no group by => only need leaves
-//    b. one storage node => only need leaves
-//    c. no other active broker node => node need leaves
-//    d. need intermediate computing nodes
+//  1. parse sql => stmt
+//  2. build parallel exec tree
+//     a. no group by => only need leaves
+//     b. one storage node => only need leaves
+//     c. no other active broker node => node need leaves
+//     d. need intermediate computing nodes
 func (p *brokerPlan) Plan() error {
 	lenOfStorageNodes := len(p.storageNodes)
 	if lenOfStorageNodes == 0 {
@@ -155,10 +155,7 @@ func (p *brokerPlan) buildIntermediates() {
 	storageNodeIDs := p.getStorageNodeIDs()
 
 	var pos, end, idx = 0, 0, 0
-	for {
-		if pos > lenOfStorageNodes {
-			break
-		}
+	for pos <= lenOfStorageNodes {
 		end += parallel
 
 		if end > lenOfStorageNodes {

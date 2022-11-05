@@ -111,7 +111,7 @@ func TestTaskClientFactory(t *testing.T) {
 
 	closed, err := fct.CloseTaskClient((&target).Indicator())
 	assert.NotNil(t, err)
-	assert.False(t, closed)
+	assert.True(t, closed)
 
 	closed, err = fct.CloseTaskClient((&models.StatelessNode{HostIP: "127.0.0.1", GRPCPort: 1000}).Indicator())
 	assert.Nil(t, err)
@@ -164,7 +164,7 @@ func TestTaskClientFactory_handler(t *testing.T) {
 		receiver.EXPECT().Receive(gomock.Any(), gomock.Any()).Return(nil),
 		mockTaskClient.EXPECT().Recv().Return(&protoCommonV1.TaskResponse{}, nil),
 		receiver.EXPECT().Receive(gomock.Any(), gomock.Any()).DoAndReturn(
-			func(req *protoCommonV1.TaskResponse, targetID string) error {
+			func(_ *protoCommonV1.TaskResponse, _ string) error {
 				taskClient.running.Store(false)
 				return fmt.Errorf("err")
 			}),

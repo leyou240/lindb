@@ -113,6 +113,11 @@ func (l *databaseLifecycle) ttlTask() {
 				l.tryDropDatabases()
 				// do data ttl
 				l.engine.TTL()
+				// do data compaction
+				tsdb.GetFamilyManager().WalkEntry(func(family tsdb.DataFamily) {
+					family.Compact()
+					family.Evict()
+				})
 				// try to evict segment(long term no read)
 				l.engine.EvictSegment()
 				// support dynamic modify config

@@ -29,7 +29,7 @@ import (
 // for testing
 var (
 	mkDirIfNotExist        = fileutil.MkDirIfNotExist
-	listDir                = fileutil.ListDir
+	listDir                = fileutil.GetDirectoryList
 	removeDir              = fileutil.RemoveDir
 	fileExist              = fileutil.Exist
 	decodeToml             = ltoml.DecodeToml
@@ -45,4 +45,5 @@ var (
 	newMemoryDBFunc        = memdb.NewMemoryDatabase
 	newDataFamilyFunc      = newDataFamily
 	newMetricDataFlusher   = metricsdata.NewFlusher
+	closeFamilyFunc        = closeFamily
 )

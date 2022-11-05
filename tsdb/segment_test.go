@@ -23,7 +23,6 @@ import (
 
 	"github.com/golang/mock/gomock"
 	"github.com/stretchr/testify/assert"
-	"go.uber.org/atomic"
 
 	"github.com/lindb/lindb/kv"
 	"github.com/lindb/lindb/models"
@@ -138,8 +137,9 @@ func TestSegment_GetOrCreateDataFamily(t *testing.T) {
 		{
 			name:      "create new family",
 			timestamp: "20190904 19:10:48",
-			prepare: func(seg *segment) {
-				newDataFamilyFunc = func(shard Shard, interval timeutil.Interval, timeRange timeutil.TimeRange,
+			prepare: func(_ *segment) {
+				newDataFamilyFunc = func(shard Shard, _ Segment,
+					interval timeutil.Interval, timeRange timeutil.TimeRange,
 					familyTime int64, family kv.Family) DataFamily {
 					return NewMockDataFamily(ctrl)
 				}
@@ -150,8 +150,9 @@ func TestSegment_GetOrCreateDataFamily(t *testing.T) {
 		{
 			name:      "family exist in kv store",
 			timestamp: "20190904 19:10:48",
-			prepare: func(seg *segment) {
-				newDataFamilyFunc = func(shard Shard, interval timeutil.Interval, timeRange timeutil.TimeRange,
+			prepare: func(_ *segment) {
+				newDataFamilyFunc = func(shard Shard, _ Segment,
+					interval timeutil.Interval, timeRange timeutil.TimeRange,
 					familyTime int64, family kv.Family) DataFamily {
 					return NewMockDataFamily(ctrl)
 				}
@@ -161,7 +162,7 @@ func TestSegment_GetOrCreateDataFamily(t *testing.T) {
 		{
 			name:      "create new family err",
 			timestamp: "20190904 20:10:48",
-			prepare: func(seg *segment) {
+			prepare: func(_ *segment) {
 				store.EXPECT().GetFamily(gomock.Any()).Return(nil)
 				store.EXPECT().CreateFamily(gomock.Any(), gomock.Any()).Return(nil, fmt.Errorf("err"))
 			},
@@ -222,14 +223,14 @@ func TestSegment_GetDataFamilies(t *testing.T) {
 	}{
 		{
 			name: "family empty",
-			prepare: func(seq *segment) {
+			prepare: func(_ *segment) {
 				store.EXPECT().ListFamilyNames().Return(nil)
 			},
 			len: 0,
 		},
 		{
 			name: "parse family name failure",
-			prepare: func(seq *segment) {
+			prepare: func(_ *segment) {
 				store.EXPECT().ListFamilyNames().Return([]string{"a"})
 			},
 			len: 0,
@@ -248,11 +249,11 @@ func TestSegment_GetDataFamilies(t *testing.T) {
 		{
 			name:      "get family from storage",
 			timeRange: timeRange,
-			prepare: func(seq *segment) {
+			prepare: func(_ *segment) {
 				dataFamily := NewMockDataFamily(ctrl)
 				family := kv.NewMockFamily(ctrl)
 				store.EXPECT().GetFamily(gomock.Any()).Return(family)
-				newDataFamilyFunc = func(shard Shard, interval timeutil.Interval,
+				newDataFamilyFunc = func(shard Shard, _ Segment, interval timeutil.Interval,
 					timeRange timeutil.TimeRange, familyTime int64, family kv.Family) DataFamily {
 					return dataFamily
 				}
@@ -267,10 +268,9 @@ func TestSegment_GetDataFamilies(t *testing.T) {
 		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
 			s := &segment{
-				kvStore:      store,
-				interval:     timeutil.Interval(10 * 1000),
-				families:     make(map[int]DataFamily),
-				lastReadTime: atomic.NewInt64(10),
+				kvStore:  store,
+				interval: timeutil.Interval(10 * 1000),
+				families: make(map[int]DataFamily),
 			}
 			if tt.prepare != nil {
 				tt.prepare(s)
@@ -342,7 +342,7 @@ func TestSegment_Close(t *testing.T) {
 
 	for _, tt := range cases {
 		tt := tt
-		t.Run(tt.name, func(t *testing.T) {
+		t.Run(tt.name, func(_ *testing.T) {
 			if tt.prepare != nil {
 				tt.prepare()
 			}
@@ -353,19 +353,8 @@ func TestSegment_Close(t *testing.T) {
 }
 
 func TestSegment_NeedEvict(t *testing.T) {
-	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
-
-	shard := NewMockShard(ctrl)
-	db := NewMockDatabase(ctrl)
-	shard.EXPECT().Database().Return(db).AnyTimes()
-	opt := &option.DatabaseOption{Ahead: "1h", Behind: "1h"}
-	db.EXPECT().GetOption().Return(opt).AnyTimes()
-	s := &segment{
-		shard:        shard,
-		lastReadTime: atomic.NewInt64(timeutil.Now()),
-	}
-	assert.False(t, s.NeedEvict())
-	s.lastReadTime.Store(timeutil.Now() - 7*timeutil.OneHour - timeutil.OneMinute)
+	interval := timeutil.Interval(10 * 1000)
+	s := &segment{interval: interval}
 	assert.True(t, s.NeedEvict())
+	s.EvictFamily(timeutil.Now())
 }

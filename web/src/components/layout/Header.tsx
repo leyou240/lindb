@@ -16,27 +16,30 @@ KIND, either express or implied.  See the License for the
 specific language governing permissions and limitations
 under the License.
 */
+import React, { useState, useContext } from "react";
 import {
   IconGithubLogo,
   IconHelpCircleStroked,
   IconHomeStroked,
 } from "@douyinfe/semi-icons";
 import { Breadcrumb, Button, Layout, Nav, Space } from "@douyinfe/semi-ui";
-import { TimePicker } from "@src/components";
-import { RouteItem, routeMap } from "@src/configs";
+import { TimePicker, Icon } from "@src/components";
+import { RouteItem } from "@src/models";
 import { useWatchURLChange } from "@src/hooks";
 import { URLStore } from "@src/stores";
 import * as _ from "lodash-es";
-import React, { useState } from "react";
+import { UIContext } from "@src/context/UIContextProvider";
 const { Header: HeaderUI } = Layout;
 
-export default function Header() {
+const Header: React.FC<{ routes: Map<string, RouteItem> }> = (props) => {
+  const { routes } = props;
+  const { toggleTheme, collapsed, isDark } = useContext(UIContext);
   const [breadcrumbRoutes, setBreadcrumbRoutes] = useState<any[]>([]);
   const [currentRouter, setCurrentRouter] = useState<any>({});
 
   useWatchURLChange(() => {
-    const pathname = URLStore.path;
-    const currentRouter = routeMap.get(pathname || "");
+    const pathname = URLStore.getPath();
+    const currentRouter = routes.get(pathname || "");
     const breadcrumbItems: any[] = [];
     if (currentRouter) {
       const generate = (item: RouteItem) => {
@@ -60,8 +63,7 @@ export default function Header() {
     <HeaderUI
       style={{
         position: "fixed",
-        width: "calc(100% - 220px)",
-        left: 220,
+        left: collapsed ? 60 : 220,
         top: 0,
         right: 0,
         zIndex: 1000,
@@ -81,6 +83,22 @@ export default function Header() {
         footer={
           <>
             {_.get(currentRouter, "timePicker", false) && <TimePicker />}
+            <Button
+              icon={
+                isDark() ? (
+                  <Icon icon="iconmoon-line" />
+                ) : (
+                  <Icon icon="iconSun" />
+                )
+              }
+              style={{
+                color: "var(--semi-color-text-2)",
+                marginLeft: 12,
+              }}
+              onClick={() => {
+                toggleTheme();
+              }}
+            />
             <Button
               icon={<IconGithubLogo size="large" />}
               style={{
@@ -102,4 +120,6 @@ export default function Header() {
       ></Nav>
     </HeaderUI>
   );
-}
+};
+
+export default Header;

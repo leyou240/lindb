@@ -17,14 +17,8 @@ specific language governing permissions and limitations
 under the License.
 */
 import { Layout } from "@douyinfe/semi-ui";
-import {
-  Footer,
-  Header,
-  SiderMenu,
-  DashboardView,
-  ChartTooltip,
-} from "@src/components";
-import { switchRouters } from "@src/configs";
+import { Footer, Header, SiderMenu } from "@src/components";
+import { defaultOpenKeys, menus, routeMap, switchRouters } from "@src/pages";
 import React from "react";
 import { Redirect, Route, Switch } from "react-router-dom";
 
@@ -33,9 +27,14 @@ const { Content } = Layout;
 export default function Console() {
   return (
     <Layout style={{ height: "100vh" }}>
-      <SiderMenu defaultOpenAll />
+      <SiderMenu
+        defaultOpenAll
+        openKeys={defaultOpenKeys}
+        routes={routeMap}
+        menus={menus}
+      />
       <Layout>
-        <Header />
+        <Header routes={routeMap} />
         <Content
           style={{
             padding: "71px 12px 12px",

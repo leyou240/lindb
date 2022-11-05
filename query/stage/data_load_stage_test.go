@@ -18,12 +18,14 @@
 package stage
 
 import (
+	"fmt"
 	"testing"
 
 	"github.com/golang/mock/gomock"
 	"github.com/stretchr/testify/assert"
 
 	"github.com/lindb/lindb/flow"
+	"github.com/lindb/lindb/pkg/timeutil"
 	"github.com/lindb/lindb/query/context"
 	"github.com/lindb/lindb/sql/stmt"
 	"github.com/lindb/lindb/tsdb"
@@ -37,6 +39,7 @@ func TestDataLoadStage_Plan(t *testing.T) {
 	db.EXPECT().ExecutorPool().Return(&tsdb.ExecutorPool{}).AnyTimes()
 	rs := flow.NewMockFilterResultSet(ctrl)
 
+	now := timeutil.Now()
 	stage := NewDataLoadStage(
 		&context.LeafExecuteContext{
 			TaskCtx:  &flow.TaskContext{},
@@ -52,6 +55,11 @@ func TestDataLoadStage_Plan(t *testing.T) {
 				},
 			},
 		},
-		&flow.TimeSegmentResultSet{FilterRS: []flow.FilterResultSet{rs}})
+		&flow.TimeSegmentResultSet{
+			FilterRS:   []flow.FilterResultSet{rs},
+			FamilyTime: now,
+		})
 	assert.NotEmpty(t, stage.Plan())
+	id := fmt.Sprintf("Data Load[%s]", timeutil.FormatTimestamp(now, timeutil.DataTimeFormat2))
+	assert.Equal(t, id, stage.Identifier())
 }

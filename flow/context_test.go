@@ -29,7 +29,6 @@ import (
 	"github.com/lindb/roaring"
 
 	"github.com/lindb/lindb/aggregation"
-	"github.com/lindb/lindb/models"
 	"github.com/lindb/lindb/pkg/timeutil"
 	"github.com/lindb/lindb/series"
 	"github.com/lindb/lindb/series/field"
@@ -104,11 +103,6 @@ func TestStorageExecuteContext_SortFields(t *testing.T) {
 	assert.Equal(t, field.Metas{{ID: 1}, {ID: 3}, {ID: 4}}, ctx.Fields)
 }
 
-func TestStorageExecuteContext_QueryStats(t *testing.T) {
-	assert.Nil(t, (&StorageExecuteContext{}).QueryStats())
-	assert.NotNil(t, (&StorageExecuteContext{Stats: models.NewStorageStats()}).QueryStats())
-}
-
 func TestStorageExecuteContext_Release(t *testing.T) {
 	ctx := &StorageExecuteContext{
 		TaskCtx: NewTaskContextWithTimeout(context.TODO(), time.Second),
@@ -170,7 +164,7 @@ func TestGroupingSeriesAgg_reduce(t *testing.T) {
 	agg := &GroupingSeriesAgg{Aggregator: seriesAgg}
 	c := 0
 	seriesAgg.EXPECT().Reset()
-	agg.reduce(func(it series.GroupedIterator) {
+	agg.reduce(func(_ series.GroupedIterator) {
 		c++
 	})
 	assert.Equal(t, 1, c)
@@ -178,7 +172,7 @@ func TestGroupingSeriesAgg_reduce(t *testing.T) {
 	c = 0
 	seriesAgg.EXPECT().Reset()
 	agg = &GroupingSeriesAgg{Aggregators: aggregation.FieldAggregates{seriesAgg}}
-	agg.reduce(func(it series.GroupedIterator) {
+	agg.reduce(func(_ series.GroupedIterator) {
 		c++
 	})
 	assert.Equal(t, 1, c)
@@ -295,7 +289,7 @@ func TestDataLoadContext_IterateLowSeriesIDs(t *testing.T) {
 	findSeriesIDs := roaring.New()
 	storageLowSeriesContainer := storageSeriesIDs.GetContainer(0)
 	storageLowSeriesIDs := storageLowSeriesContainer.ToArray()
-	ctx.IterateLowSeriesIDs(storageLowSeriesContainer, func(seriesIdxFromQuery uint16, seriesIdxFromStorage int) {
+	ctx.IterateLowSeriesIDs(storageLowSeriesContainer, func(_ uint16, seriesIdxFromStorage int) {
 		findSeriesIDs.Add(uint32(storageLowSeriesIDs[seriesIdxFromStorage]))
 	})
 	assert.Equal(t, querySeriesIDs, findSeriesIDs)

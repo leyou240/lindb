@@ -13,6 +13,9 @@ help:  ## Display this help
 	@awk 'BEGIN {FS = ":.*##"; printf "\nUsage:\n  make \033[36m<target>\033[0m\n\nTargets:\n"} \
 		/^[a-zA-Z_-]+:.*?##/ { printf "  \033[36m%-10s\033[0m %s\n", $$1, $$2 }' $(MAKEFILE_LIST)
 
+run: ## run local standalone cluster for demo/debug
+	go run github.com/lindb/lindb/cmd/lind standalone run --pprof --doc
+
 build-frontend: ## build frontend
 	cd web/ && make web_build
 
@@ -42,11 +45,11 @@ import: ## opt go imports format.
 	sh imports.sh
 
 lint: ## run lint
-	go install "github.com/golangci/golangci-lint/cmd/golangci-lint@v1.45.0"
+	go install "github.com/golangci/golangci-lint/cmd/golangci-lint@v1.48.0"
 	golangci-lint run ./...
 
 api-doc: ## generate api document
-	go install "github.com/swaggo/swag/cmd/swag@v1.5.0"
+	go install "github.com/swaggo/swag/cmd/swag@v1.8.7"
 	swag init -g pkg/http/doc.go
 
 test-without-lint: ## Run test without lint
@@ -71,10 +74,18 @@ deps:  ## Update vendor.
 
 generate:  ## generate pb/tmpl file.
 	# go get github.com/benbjohnson/tmpl
-	# go install github.com/benbjohnson/tmpl
+	go install github.com/benbjohnson/tmpl@latest
     # brew install flatbuffers
 	sh ./proto/generate.sh
 	cd tsdb/template && sh generate_tmpl.sh
+
+gen-sql-grammar: ## generate lin query language gen-sql-grammar
+	# need install antrl4-tools
+	# https://github.com/antlr/antlr4/blob/master/doc/getting-started.md
+	antlr4 -Dlanguage=Go -listener -visitor -package grammar ./sql/grammar/SQL.g4
+
+key-words: ## print all key words for lin query language
+	go run github.com/lindb/lindb/cmd/tools keywords 
 
 clean-mock: ## remove all mock files
 	find ./ -name "*_mock.go" | xargs rm

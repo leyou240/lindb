@@ -27,6 +27,19 @@ import (
 	"github.com/lindb/lindb/query/operator"
 )
 
+type mockOp struct {
+}
+
+func (op *mockOp) Identifier() string {
+	return "id"
+}
+func (op *mockOp) Execute() error {
+	return nil
+}
+func (op *mockOp) Stats() interface{} {
+	return nil
+}
+
 func TestPlanNode(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
@@ -36,16 +49,28 @@ func TestPlanNode(t *testing.T) {
 	n := empty.(*planNode)
 	assert.Nil(t, n.op)
 	assert.NoError(t, n.Execute())
+	stats, err := n.ExecuteWithStats()
+	assert.NoError(t, err)
+	assert.Nil(t, stats)
 
 	plan := NewPlanNode(op)
 	n = plan.(*planNode)
 	assert.NotNil(t, n.op)
 	op.EXPECT().Execute().Return(fmt.Errorf("err"))
 	assert.Error(t, plan.Execute())
+	op.EXPECT().Execute().Return(fmt.Errorf("err"))
+	op.EXPECT().Identifier().Return("identifier")
+	stats, err = n.ExecuteWithStats()
+	assert.Error(t, err)
+	assert.NotNil(t, stats)
 
 	plan.AddChild(NewEmptyPlanNode())
 	assert.Len(t, plan.Children(), 1)
 	assert.False(t, plan.IgnoreNotFound())
 
 	assert.True(t, NewPlanNodeWithIgnore(op).IgnoreNotFound())
+	plan = NewPlanNode(&mockOp{})
+	stats, err = plan.ExecuteWithStats()
+	assert.NoError(t, err)
+	assert.NotNil(t, stats)
 }

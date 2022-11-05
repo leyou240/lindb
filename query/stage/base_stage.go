@@ -23,6 +23,7 @@ import (
 
 	"github.com/lindb/lindb/constants"
 	"github.com/lindb/lindb/internal/concurrent"
+	"github.com/lindb/lindb/models"
 )
 
 // baseStage represents common implements for Stage interface.
@@ -31,11 +32,23 @@ type baseStage struct {
 
 	stageType Type
 	execPool  concurrent.Pool
+
+	operators []*models.OperatorStats
+}
+
+// Stats returns the stats of current stage.
+func (stage *baseStage) Stats() []*models.OperatorStats {
+	return stage.operators
 }
 
 // Type returns the type of stage.
 func (stage *baseStage) Type() Type {
 	return stage.stageType
+}
+
+// IsAsync returns stage if stage async execute.
+func (stage *baseStage) IsAsync() bool {
+	return stage.execPool != nil && stage.ctx != nil
 }
 
 // Execute executes the plan node, if it executes success invoke completeHandle func else invoke errHande func.
@@ -48,23 +61,27 @@ func (stage *baseStage) Execute(node PlanNode, completeHandle func(), errHandle 
 			completeHandle()
 		}
 	}
-	if stage.execPool == nil || stage.ctx == nil {
-		execFn()
-	} else {
+	if stage.IsAsync() {
 		stage.execPool.Submit(stage.ctx, concurrent.NewTask(func() {
 			execFn()
 		}, errHandle))
+	} else {
+		execFn()
 	}
 }
 
 // execute the plan node under current stage.
-func (stage *baseStage) execute(node PlanNode) error {
+func (stage *baseStage) execute(node PlanNode) (err error) {
 	if node == nil {
 		return nil
 	}
 
+	var stats *models.OperatorStats
 	// execute current plan node logic
-	err := node.Execute()
+	stats, err = node.ExecuteWithStats()
+	if stats != nil {
+		stage.operators = append(stage.operators, stats)
+	}
 	if err != nil {
 		if node.IgnoreNotFound() && errors.Is(err, constants.ErrNotFound) {
 			return nil

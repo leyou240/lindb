@@ -30,6 +30,7 @@ import (
 	"github.com/lindb/lindb/flow"
 	"github.com/lindb/lindb/models"
 	protoCommonV1 "github.com/lindb/lindb/proto/gen/v1/common"
+	"github.com/lindb/lindb/query/tracker"
 	"github.com/lindb/lindb/rpc"
 	stmtpkg "github.com/lindb/lindb/sql/stmt"
 	"github.com/lindb/lindb/tsdb"
@@ -51,21 +52,21 @@ func TestLeafExecuteContext_SendResponse(t *testing.T) {
 		{
 			name: "send response with err",
 			in:   fmt.Errorf("err"),
-			prepare: func(ctx *LeafExecuteContext) {
+			prepare: func(_ *LeafExecuteContext) {
 				leaf.Receivers = nil
 			},
 		},
 		{
 			name: "not found send stream",
 			in:   fmt.Errorf("err"),
-			prepare: func(ctx *LeafExecuteContext) {
+			prepare: func(_ *LeafExecuteContext) {
 				taskServerFct.EXPECT().GetStream(gomock.Any()).Return(nil)
 			},
 		},
 		{
 			name: "send response failure",
 			in:   fmt.Errorf("err"),
-			prepare: func(ctx *LeafExecuteContext) {
+			prepare: func(_ *LeafExecuteContext) {
 				taskServerFct.EXPECT().GetStream(gomock.Any()).Return(stream)
 				stream.EXPECT().Send(gomock.Any()).Return(fmt.Errorf("err"))
 			},
@@ -75,6 +76,8 @@ func TestLeafExecuteContext_SendResponse(t *testing.T) {
 			in:   nil,
 			prepare: func(ctx *LeafExecuteContext) {
 				ctx.StorageExecuteCtx.GroupingTagValueIDs = []*roaring.Bitmap{roaring.BitmapOf(1, 2)}
+				ctx.StorageExecuteCtx.Query.Explain = true
+				ctx.StorageExecuteCtx.Query.GroupBy = []string{"key"}
 				ctx.GroupingCtx.collectGroupingTagsCompleted = make(chan struct{})
 				taskServerFct.EXPECT().GetStream(gomock.Any()).Return(stream)
 				stream.EXPECT().Send(gomock.Any()).Return(fmt.Errorf("err"))
@@ -89,6 +92,7 @@ func TestLeafExecuteContext_SendResponse(t *testing.T) {
 			prepare: func(ctx *LeafExecuteContext) {
 				ctx.StorageExecuteCtx.GroupingTagValueIDs = []*roaring.Bitmap{roaring.BitmapOf(1, 2)}
 				ctx.GroupingCtx.collectGroupingTagsCompleted = make(chan struct{})
+				ctx.StorageExecuteCtx.Query.GroupBy = []string{"key"}
 				taskServerFct.EXPECT().GetStream(gomock.Any()).Return(stream)
 				stream.EXPECT().Send(gomock.Any()).Return(fmt.Errorf("err"))
 				time.AfterFunc(time.Millisecond*100, func() {
@@ -100,7 +104,7 @@ func TestLeafExecuteContext_SendResponse(t *testing.T) {
 
 	for _, tt := range cases {
 		tt := tt
-		t.Run(tt.name, func(t *testing.T) {
+		t.Run(tt.name, func(_ *testing.T) {
 			defer func() {
 				leaf.Receivers = []models.StatelessNode{{}}
 			}()
@@ -109,7 +113,8 @@ func TestLeafExecuteContext_SendResponse(t *testing.T) {
 				Ctx:    c,
 				Cancel: cancel,
 			}
-			ctx := NewLeafExecuteContext(taskCtx, &stmtpkg.Query{},
+			ctx := NewLeafExecuteContext(taskCtx, tracker.NewStageTracker(taskCtx),
+				&stmtpkg.Query{},
 				&protoCommonV1.TaskRequest{}, taskServerFct, leaf, db)
 
 			if tt.prepare != nil {

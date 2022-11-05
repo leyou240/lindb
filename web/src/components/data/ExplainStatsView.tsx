@@ -17,318 +17,319 @@ specific language governing permissions and limitations
 under the License.
 */
 import {
-  IconFile,
-  IconFlowChartStroked,
+  IconFixedStroked,
+  IconShareStroked,
   IconServerStroked,
   IconTemplateStroked,
 } from "@douyinfe/semi-icons";
 import { Tree, Typography } from "@douyinfe/semi-ui";
-import { CanvasChart, MetricStatus } from "@src/components";
-import { ChartStatus, ExplainResult, UnitEnum } from "@src/models";
-import { ChartStore } from "@src/stores";
-import { formatter } from "@src/utils";
-import { reaction } from "mobx";
-import React, { useEffect, useState } from "react";
+import {
+  ExplainResult,
+  LeafNodeStats,
+  OperatorStats,
+  StageStats,
+  Unit,
+} from "@src/models";
+import { FormatKit } from "@src/utils";
+import React, { useRef, MutableRefObject } from "react";
+import * as _ from "lodash-es";
 const Text = Typography.Text;
 
-interface ExplainStatsViewProps {
-  chartId: string;
-}
+type totalStats = {
+  total: number;
+  start: number;
+  end: number;
+};
 
-const ExplainStatsView: React.FC<ExplainStatsViewProps> = (
-  props: ExplainStatsViewProps
-) => {
-  const { chartId } = props;
-  const [state, setState] = useState<ExplainResult>();
+type stats = {
+  start: number;
+  end: Number;
+  cost: number;
+};
 
-  const renderCost = (cost: any, total: any) => {
-    const percent = (cost * 100.0) / total;
+const ExplainStatsView: React.FC<{ state: ExplainResult }> = (props) => {
+  const { state } = props;
+  const totalStats = useRef() as MutableRefObject<totalStats>;
+
+  const getColor = (percent: number) => {
     let type: any = "success";
     if (percent > 50) {
       type = "danger";
     } else if (percent > 30) {
       type = "warning";
     }
-    return <Text type={type}>{formatter(cost, UnitEnum.Nanoseconds)}</Text>;
+    return type;
   };
 
-  const buildCollectValueStats = (total: any, key: string, stats: any) => {
-    let children: any = [];
-    const loadNodes = {
-      label: <Text strong>Collect Tag Values(Async)</Text>,
-      key: `${key}collect tag values`,
-      children: children,
-    };
-    for (let groupgTagKey of Object.keys(stats)) {
-      const cost = stats[groupgTagKey];
-      children.push({
-        label: (
-          <span>
-            <Text link strong>
-              {groupgTagKey}
-            </Text>
-            : {renderCost(cost, total)}
-          </span>
-        ),
-        key: `${key + groupgTagKey}cost`,
-        // icon: <HddOutlined />,
-      });
-    }
-    return loadNodes;
+  const timeline = (stats: stats, color?: string) => {
+    const totalS = totalStats.current;
+    const percent = (stats.cost * 100) / totalS.total;
+    const offset = ((stats.start - totalS.start) * 100) / totalS.total;
+    const background = color ? color : getColor(percent);
+    return (
+      <>
+        <div className="lin-explain-timeline">
+          <div
+            className="inner"
+            style={{
+              backgroundColor: `var(--semi-color-${background})`,
+              width: `${percent}%`,
+              marginLeft: `calc(${offset}%)`,
+            }}
+          ></div>
+        </div>
+      </>
+    );
+  };
+  const style = {
+    display: "flex",
+    justifyContent: "space-between",
+    alignItems: "center",
   };
 
-  const buildLoadStats = (total: any, key: string, loadStats: any) => {
-    let children: any = [];
-    const loadNodes = {
-      label: <Text strong>Load Data(Async)</Text>,
-      key: `${key}load data`,
-      children: children,
-    };
-    for (let id of Object.keys(loadStats)) {
-      const stats = loadStats[id];
-      children.push({
-        label: (
-          <span>
-            <Text strong link>
-              {id}
-            </Text>
-            : [ Count: <Text link>{formatter(stats.count, UnitEnum.None)}</Text>
-            , Total Cost: {renderCost(stats.totalCost, total)}, Min:{" "}
-            {renderCost(stats.min, total)}, Max: {renderCost(stats.min, total)},
-            Num. Of Series:{" "}
-            <Text link>{formatter(stats.series, UnitEnum.None)}</Text> ]
-          </span>
-        ),
-        key: `${key + id}cost`,
-        icon: <IconFile />,
-      });
-    }
-    return loadNodes;
+  const renderCost = (cost: any) => {
+    const percent = (cost * 100.0) / totalStats.current.total;
+    let type: any = getColor(percent);
+    return <Text type={type}>{FormatKit.format(cost, Unit.Nanoseconds)}</Text>;
   };
 
-  const buildShardNodes = (total: any, key: string, shards: any) => {
-    let children: any = [];
-    const shardNodes = {
-      label: <Text strong>Shards(Async)</Text>,
-      key: `${key}shards`,
-      children: children,
-    };
-    for (let shardID of Object.keys(shards)) {
-      const shardStats = shards[shardID];
-      let nodeStats = {
+  const buildOperatorStats = (
+    parent: string,
+    operators: OperatorStats[]
+  ): any[] => {
+    const children: any[] = [];
+    _.forEach(operators, (item: OperatorStats, idx: number) => {
+      const key = `${`${parent}-Leaf-Stage-Operator-${item.identifier}-${idx}`}`;
+      const operatorNode = {
         label: (
-          <span>
-            <Text strong link>
-              {shardID}{" "}
-            </Text>
-            : Series Filtering: [ Cost:{" "}
-            {renderCost(shardStats.seriesFilterCost, total)}, Num. Of Series:{" "}
-            <Text link>{formatter(shardStats.numOfSeries, UnitEnum.None)}</Text>{" "}
-            ]
-          </span>
-        ),
-        key: key + shardID,
-        icon: <IconFlowChartStroked />,
-        children: [
-          {
-            label: (
-              <span>
-                <Text strong> Memory Filtering</Text>:{" "}
-                {renderCost(shardStats.memFilterCost, total)}
-              </span>
-            ),
-            key: `${key + shardID}memory filtering`,
-          },
-          {
-            label: (
-              <span>
-                <Text strong>KV Store Filtering:</Text>{" "}
-                {renderCost(shardStats.kvFilterCost, total)}
-              </span>
-            ),
-            key: `${key + shardID}kv store filtering`,
-          },
-          {
-            label: (
-              <span>
-                <Text strong>Grouping</Text>:{" "}
-                {renderCost(shardStats.groupingCost, total)}
-              </span>
-            ),
-            key: `${key + shardID}Grouping`,
-          },
-        ],
-      };
-      if (shardStats.groupBuildStats) {
-        nodeStats.children.push({
-          label: (
+          <div style={style}>
             <span>
-              <Text strong>Group Build(Async)</Text>: [ Count:{" "}
-              <Text link>
-                {formatter(shardStats.groupBuildStats.count, UnitEnum.None)}
-              </Text>
-              , Total Cost:{" "}
-              {renderCost(shardStats.groupBuildStats.totalCost, total)}, Min:{" "}
-              {renderCost(shardStats.groupBuildStats.min, total)}, Max:{" "}
-              {renderCost(shardStats.groupBuildStats.min, total)} ]
+              <Text strong>{item.identifier}</Text>: [ Cost:{" "}
+              {renderCost(item.cost)} ]
             </span>
-          ),
-          key: `${key + shardID}group build`,
-        });
-      }
-      children.push(nodeStats);
-      if (shardStats.scanStats) {
-        nodeStats.children.push(
-          buildLoadStats(total, key + shardID, shardStats.scanStats)
-        );
-      }
-    }
-    return shardNodes;
+            {timeline({
+              start: item.start,
+              end: item.end,
+              cost: item.cost,
+            })}
+          </div>
+        ),
+        key: key,
+        icon: <IconFixedStroked />,
+      };
+      children.push(operatorNode);
+    });
+    return children;
   };
 
-  const buildStorageNodes = (parent: string, total: any, storageNodes: any) => {
+  const buildStageStats = (
+    parent: string,
+    total: number,
+    stages: StageStats[]
+  ): any[] => {
+    if (_.isEmpty(stages)) {
+      return [];
+    }
     let children: any = [];
-    let storageNode = {
-      label: <Text strong>Storage Nodes</Text>,
-      key: `${parent}-Storage-Nodes`,
-      children: children,
-    };
-    for (let key of Object.keys(storageNodes)) {
-      const storageNodeStats = storageNodes[key];
+    _.forEach(stages, (item: StageStats, idx: number) => {
+      const key = `${`${parent}-Leaf-Stage-${item.identifier}-${idx}`}`;
+      const stageNode = {
+        label: (
+          <div style={style}>
+            <span>
+              <Text strong>{item.identifier}</Text>: [{" "}
+              {item.async && <Text type="success">Async</Text>} Cost:{" "}
+              {renderCost(item.cost)} ]
+            </span>
+            {timeline({ start: item.start, end: item.end, cost: item.cost })}
+          </div>
+        ),
+        key: key,
+        icon: <IconShareStroked />,
+        children: [] as any[],
+      };
+      children.push(stageNode);
+      if (!_.isEmpty(item.operators)) {
+        stageNode.children.push(...buildOperatorStats(key, item.operators));
+      }
+
+      if (!_.isEmpty(item.children)) {
+        stageNode.children.push(...buildStageStats(key, total, item.children));
+      }
+    });
+    return children;
+  };
+
+  const buildLeafNodes = (parent: string, total: number, leafNodes: any) => {
+    let children: any = [];
+    for (let key of Object.keys(leafNodes)) {
+      const leafNodeStats = leafNodes[key] as LeafNodeStats;
+      const nKey = `${parent}-Leaf-Nodes-${key}`;
 
       let nodeStats = {
         label: (
-          <span>
-            <Text strong link>
-              {key}
-            </Text>
-            : [ Cost: {renderCost(storageNodeStats.totalCost, total)}, Network
-            Payload:{" "}
-            <Text link>
-              {" "}
-              {formatter(storageNodeStats.netPayload, UnitEnum.Bytes)})
-            </Text>{" "}
-            ]
-          </span>
+          <div style={style}>
+            <span>
+              <Text strong>
+                Leaf[
+                <Text strong link>
+                  {key}
+                </Text>
+                ]
+              </Text>
+              : [ Cost: {renderCost(leafNodeStats.totalCost)}, Network Payload:{" "}
+              <Text link>
+                {" "}
+                {FormatKit.format(leafNodeStats.netPayload, Unit.Bytes)}
+              </Text>{" "}
+              ]
+            </span>
+            {timeline({
+              start: leafNodeStats.start,
+              end: leafNodeStats.end,
+              cost: leafNodeStats.totalCost,
+            })}
+          </div>
         ),
-        key: `${parent}-Storage-Nodes-${key}`,
+        key: nKey,
         icon: <IconServerStroked />,
-        children: [
-          {
-            label: (
-              <span>
-                <Text strong>Execute Plan</Text>:{" "}
-                {renderCost(storageNodeStats.planCost, total)}
-              </span>
-            ),
-            key: `${parent}-${key}plan-execute`,
-          },
-          {
-            label: (
-              <span>
-                <Text strong>Tag Metadata Filtering</Text>:{" "}
-                {renderCost(storageNodeStats.tagFilterCost, total)}
-              </span>
-            ),
-            key: `${parent}-${key}tag-filtering`,
-          },
-        ],
+        children: buildStageStats(nKey, total, leafNodeStats.stages),
       };
       children.push(nodeStats);
-      if (storageNodeStats.collectTagValuesStats) {
-        nodeStats.children.push(
-          buildCollectValueStats(
-            total,
-            `${parent}-${key}`,
-            storageNodeStats.collectTagValuesStats
-          )
-        );
-      }
-      if (storageNodeStats.shards) {
-        nodeStats.children.push(
-          buildShardNodes(total, `${parent}-${key}`, storageNodeStats.shards)
-        );
-      }
     }
-    return storageNode;
+    return children;
   };
 
   const buildIntermediateBrokers = (total: any, brokerNodes: any) => {
     let children: any = [];
-    let IntermediateNode = {
-      label: <Text strong>Intermediate Nodes</Text>,
-      key: "Intermediate-Nodes",
-      children: children,
-    };
+    let idx = 0;
     for (let key of Object.keys(brokerNodes)) {
       const brokerNodeStats = brokerNodes[key];
       const nodeStats = {
         label: (
-          <span>
-            <Text strong link>
-              {key}
-            </Text>
-            : [ Waiting: {renderCost(brokerNodeStats.waitCost, total)}, Cost:{" "}
-            {renderCost(brokerNodeStats.totalCost, total)}, Network Payload:{" "}
-            <Text link>
-              {" "}
-              {formatter(brokerNodeStats.netPayload, UnitEnum.Bytes)})
-            </Text>{" "}
-            ]
-          </span>
+          <div style={style}>
+            <span>
+              <Text strong>
+                Intermediate[
+                <Text strong link>
+                  {key}
+                </Text>
+                ]
+              </Text>
+              : [ Waiting: {renderCost(brokerNodeStats.waitCost)}, Cost:{" "}
+              {renderCost(brokerNodeStats.totalCost)}, Network Payload:{" "}
+              <Text link>
+                {" "}
+                {FormatKit.format(brokerNodeStats.netPayload, Unit.Bytes)})
+              </Text>{" "}
+              ]
+            </span>
+            {timeline({
+              start: brokerNodeStats.start,
+              end: brokerNodeStats.End,
+              cost: brokerNodeStats.totalCost,
+            })}
+          </div>
         ),
         icon: <IconTemplateStroked />,
         key: `Intermediate-${key}`,
         children: [] as any,
       };
       children.push(nodeStats);
-      if (brokerNodeStats.storageNodes) {
+      if (brokerNodeStats.leafNodes) {
         nodeStats.children.push(
-          buildStorageNodes(key, total, brokerNodeStats.storageNodes)
+          ...buildLeafNodes(`${key}-${idx}`, total, brokerNodeStats.leafNodes)
         );
       }
+      idx++;
     }
-    console.log("IntermediateNode", IntermediateNode);
-    return IntermediateNode;
+    return children;
   };
 
   const buildStatsData = () => {
     if (!state) {
       return [];
     }
+    totalStats.current = {
+      total: state.totalCost,
+      start: state.start,
+      end: state.end,
+    };
     let root = {
       label: (
-        <>
-          <Text strong>Root</Text>:{" "}
-          <Text link>{formatter(state.totalCost, UnitEnum.Nanoseconds)}</Text>
-        </>
+        <div style={style}>
+          <span>
+            <Text strong>
+              Root[
+              <Text strong link>
+                {state.root}
+              </Text>
+              ]
+            </Text>
+            : [ Cost:{" "}
+            <Text link>
+              {FormatKit.format(state.totalCost, Unit.Nanoseconds)}
+            </Text>
+            , Network Payload:{" "}
+            <Text link>{FormatKit.format(state.netPayload, Unit.Bytes)}</Text> ]
+          </span>
+          {timeline(
+            {
+              start: state.start,
+              end: state.end,
+              cost: state.totalCost,
+            },
+            "success"
+          )}
+        </div>
       ),
       key: "Root",
+      icon: <IconServerStroked />,
       children: [
         {
           label: (
-            <span>
-              <Text strong>Execute Plan</Text> :{" "}
-              {renderCost(state.planCost, state.totalCost)}
-            </span>
+            <div style={style}>
+              <span>
+                <Text strong>Execute Plan</Text> : {renderCost(state.planCost)}
+              </span>
+              {timeline({
+                start: state.planStart,
+                end: state.planEnd,
+                cost: state.planCost,
+              })}
+            </div>
           ),
           key: "Execute Plan",
         },
         {
           label: (
-            <span>
-              <Text strong>Waiting Response</Text>:{" "}
-              {renderCost(state.waitCost, state.totalCost)}
-            </span>
+            <div style={style}>
+              <span>
+                <Text strong>Waiting Response</Text>:{" "}
+                {renderCost(state.waitCost)}
+              </span>
+              {timeline({
+                start: state.waitStart,
+                end: state.waitEnd,
+                cost: state.waitCost,
+              })}
+            </div>
           ),
           key: "Waiting Intermediate Response",
         },
         {
           label: (
-            <span>
-              <Text strong>Expression Eval</Text>:{" "}
-              {renderCost(state.expressCost, state.totalCost)}
-            </span>
+            <div style={style}>
+              <span>
+                <Text strong>Expression Eval</Text>:{" "}
+                {renderCost(state.expressCost)}
+              </span>
+              {timeline({
+                start: state.expressStart,
+                end: state.expressEnd,
+                cost: state.expressCost,
+              })}
+            </div>
           ),
           key: "Expression Eval",
         },
@@ -336,42 +337,19 @@ const ExplainStatsView: React.FC<ExplainStatsViewProps> = (
     };
     if (state.brokerNodes) {
       root.children.push(
-        buildIntermediateBrokers(state.totalCost, state.brokerNodes)
+        ...buildIntermediateBrokers(state.totalCost, state.brokerNodes)
       );
     }
-    if (state.storageNodes) {
+    if (state.leafNodes) {
       root.children.push(
-        buildStorageNodes("root", state.totalCost, state.storageNodes)
+        ...buildLeafNodes("root", state.totalCost, state.leafNodes)
       );
     }
     return [root];
   };
 
-  useEffect(() => {
-    const disposer = [
-      reaction(
-        () => ChartStore.chartStatusMap.get(chartId),
-        (s: ChartStatus | undefined) => {
-          if (!s || s == ChartStatus.Loading) {
-            return;
-          }
-          const state = ChartStore.stateCache.get(chartId);
-          setState(state);
-        }
-      ),
-    ];
-
-    return () => {
-      disposer.forEach((d) => d());
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  console.log("buildStatsData", buildStatsData());
-
   return (
     <>
-      <MetricStatus chartId={chartId} showMsg />
       <Tree
         expandAll
         // icon
@@ -379,9 +357,6 @@ const ExplainStatsView: React.FC<ExplainStatsViewProps> = (
         treeData={buildStatsData()}
         style={{ display: state ? "block" : "none" }}
       />
-      <div style={{ display: !state ? "block" : "none" }}>
-        <CanvasChart chartId={chartId} height={300} disableDrag />
-      </div>
     </>
   );
 };

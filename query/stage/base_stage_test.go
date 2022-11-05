@@ -27,6 +27,7 @@ import (
 
 	"github.com/lindb/lindb/constants"
 	"github.com/lindb/lindb/internal/concurrent"
+	"github.com/lindb/lindb/models"
 )
 
 type mockPool struct {
@@ -74,7 +75,7 @@ func TestBaseStage_Execute(t *testing.T) {
 			plan: NewMockPlanNode(ctrl),
 			prepare: func(p *MockPlanNode) {
 				p.EXPECT().IgnoreNotFound().Return(false)
-				p.EXPECT().Execute().Return(fmt.Errorf("err"))
+				p.EXPECT().ExecuteWithStats().Return(nil, fmt.Errorf("err"))
 			},
 			errHandler: func(err error) {
 				assert.Error(t, err)
@@ -85,7 +86,7 @@ func TestBaseStage_Execute(t *testing.T) {
 			plan: NewMockPlanNode(ctrl),
 			prepare: func(p *MockPlanNode) {
 				p.EXPECT().IgnoreNotFound().Return(true)
-				p.EXPECT().Execute().Return(constants.ErrNotFound)
+				p.EXPECT().ExecuteWithStats().Return(nil, constants.ErrNotFound)
 			},
 			completeHandle: func() {
 				assert.True(t, true)
@@ -95,10 +96,10 @@ func TestBaseStage_Execute(t *testing.T) {
 			name: "execute children plan failure",
 			plan: NewMockPlanNode(ctrl),
 			prepare: func(p *MockPlanNode) {
-				p.EXPECT().Execute().Return(nil)
+				p.EXPECT().ExecuteWithStats().Return(&models.OperatorStats{}, nil)
 				p1 := NewMockPlanNode(ctrl)
 				p1.EXPECT().IgnoreNotFound().Return(false)
-				p1.EXPECT().Execute().Return(fmt.Errorf("err"))
+				p1.EXPECT().ExecuteWithStats().Return(nil, fmt.Errorf("err"))
 				p.EXPECT().Children().Return([]PlanNode{p1})
 			},
 			errHandler: func(err error) {
@@ -110,7 +111,7 @@ func TestBaseStage_Execute(t *testing.T) {
 			plan: NewMockPlanNode(ctrl),
 			prepare: func(p *MockPlanNode) {
 				s.ctx = nil
-				p.EXPECT().Execute().Return(nil)
+				p.EXPECT().ExecuteWithStats().Return(&models.OperatorStats{}, nil)
 				p.EXPECT().Children().Return(nil)
 			},
 			completeHandle: func() {
@@ -121,9 +122,9 @@ func TestBaseStage_Execute(t *testing.T) {
 			name: "execute plan successfully",
 			plan: NewMockPlanNode(ctrl),
 			prepare: func(p *MockPlanNode) {
-				p.EXPECT().Execute().Return(nil)
+				p.EXPECT().ExecuteWithStats().Return(&models.OperatorStats{}, nil)
 				p1 := NewMockPlanNode(ctrl)
-				p1.EXPECT().Execute().Return(nil)
+				p1.EXPECT().ExecuteWithStats().Return(&models.OperatorStats{}, nil)
 				p1.EXPECT().Children().Return(nil)
 				p.EXPECT().Children().Return([]PlanNode{p1})
 			},
@@ -135,7 +136,7 @@ func TestBaseStage_Execute(t *testing.T) {
 
 	for _, tt := range cases {
 		tt := tt
-		t.Run(tt.name, func(t *testing.T) {
+		t.Run(tt.name, func(_ *testing.T) {
 			defer func() {
 				s.ctx = context.TODO()
 			}()
@@ -145,4 +146,25 @@ func TestBaseStage_Execute(t *testing.T) {
 			s.Execute(tt.plan, tt.completeHandle, tt.errHandler)
 		})
 	}
+}
+
+func TestBaseStage_Track(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	pool := &mockPool{}
+	s := &baseStage{
+		ctx:       context.TODO(),
+		stageType: Grouping,
+		execPool:  pool,
+	}
+
+	p := NewMockPlanNode(ctrl)
+	p.EXPECT().ExecuteWithStats().Return(&models.OperatorStats{}, nil)
+	p.EXPECT().Children().Return(nil)
+	s.Execute(p, func() {
+	}, func(err error) {
+	})
+	assert.NotNil(t, s.Stats())
+	assert.True(t, s.IsAsync())
 }

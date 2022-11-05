@@ -16,11 +16,14 @@ KIND, either express or implied.  See the License for the
 specific language governing permissions and limitations
 under the License.
 */
-import Chart from "chart.js/auto";
+import { Chart, registerables } from "chart.js";
 import * as helpers from "chart.js/helpers";
 import * as _ from "lodash-es";
-import { UnitEnum } from "@src/models";
-import { formatter } from "@src/utils";
+import { Unit } from "@src/models";
+import { FormatKit } from "@src/utils";
+import { Theme } from "@src/constants";
+
+Chart.register(...registerables);
 
 export const INTERVALS = [
   10000,
@@ -32,6 +35,7 @@ export const INTERVALS = [
   15 * 60 * 1000,
   30 * 60 * 1000,
 ];
+
 function getVisibleInterval(times: any, interval: number, width: number) {
   const ticksCount = times.length;
   const perTickPX = width / (ticksCount - 1);
@@ -52,173 +56,16 @@ function getVisibleInterval(times: any, interval: number, width: number) {
   return result;
 }
 
-// Chart.register({
-//   id: "lazy",
-//   afterUpdate: function (chart: any) {
-//     const xAxes = chart.scales["xAxes-bottom"];
-//     const tickOffset = _.get(xAxes, "options.ticks.tickOffset", null);
-//     const display = _.get(xAxes, "options.display", false);
-//     if (display && tickOffset) {
-//       const width = _.get(chart, "scales.xAxes-bottom.width", 0);
-//       const interval = _.get(chart, "config.options.interval", 0);
-//       const times = _.get(chart, "config.options.times", []);
-//       const visibleInterval = getVisibleInterval(times, interval, width);
-
-//       xAxes.draw = function () {
-//         const xScale = chart.scales["xAxes-bottom"];
-
-//         // const tickFontColor = helpers.getValueOrDefault(
-//         //   xScale.options.ticks.fontColor,
-//         //   Chart.defaults.defaultFontColor
-//         // );
-//         // const tickFontSize = helpers.getValueOrDefault(
-//         //   xScale.options.ticks.fontSize,
-//         //   ChartJS.defaults.global.defaultFontSize
-//         // );
-//         // const tickFontStyle = helpers.getValueOrDefault(
-//         //   xScale.options.ticks.fontStyle,
-//         //   ChartJS.defaults.global.defaultFontStyle
-//         // );
-//         // const tickFontFamily = helpers.getValueOrDefault(
-//         //   xScale.options.ticks.fontFamily,
-//         //   ChartJS.defaults.global.defaultFontFamily
-//         // );
-//         // const tickLabelFont = helpers.fontString(
-//         //   tickFontSize,
-//         //   tickFontStyle,
-//         //   tickFontFamily
-//         // );
-//         const tl = xScale.options.gridLines.tickMarkLength;
-
-//         const isRotated = xScale.labelRotation !== 0;
-//         const yTickStart = xScale.top;
-//         const yTickEnd = xScale.top + tl;
-//         const chartArea = chart.chartArea;
-
-//         helpers.each(
-//           xScale.ticks,
-//           (label: any, index: any) => {
-//             if (times[index] % visibleInterval !== 0) {
-//               return;
-//             }
-//             // console.log("xxxxxx",index,times,visibleInterval)
-
-//             // copy of chart.js code
-//             let xLineValue = this.getPixelForTick(index);
-//             const xLabelValue = this.getPixelForTick(
-//               index,
-//               this.options.gridLines.offsetGridLines
-//             );
-
-//             if (this.options.gridLines.display) {
-//               this.ctx.lineWidth = this.options.gridLines.lineWidth;
-//               this.ctx.strokeStyle = this.options.gridLines.color;
-
-//               xLineValue += helpers.aliasPixel(this.ctx.lineWidth);
-
-//               // Draw the label area
-//               this.ctx.beginPath();
-
-//               if (this.options.gridLines.drawTicks) {
-//                 this.ctx.moveTo(xLineValue, yTickStart);
-//                 this.ctx.lineTo(xLineValue, yTickEnd);
-//               }
-
-//               // Draw the chart area
-//               if (this.options.gridLines.drawOnChartArea) {
-//                 this.ctx.moveTo(xLineValue, chartArea.top);
-//                 this.ctx.lineTo(xLineValue, chartArea.bottom);
-//               }
-
-//               // Need to stroke in the loop because we are potentially changing line widths & colours
-//               this.ctx.stroke();
-//             }
-
-//             if (this.options.ticks.display) {
-//               this.ctx.save();
-//               this.ctx.translate(
-//                 xLabelValue + this.options.ticks.labelOffset,
-//                 isRotated
-//                   ? this.top + 12
-//                   : this.options.position === "top"
-//                   ? this.bottom - tl
-//                   : this.top + tl
-//               );
-//               this.ctx.rotate(helpers.toRadians(this.labelRotation) * -1);
-//               // this.ctx.font = tickLabelFont;
-//               this.ctx.textAlign = isRotated ? "right" : "center";
-//               this.ctx.textBaseline = isRotated
-//                 ? "middle"
-//                 : this.options.position === "top"
-//                 ? "bottom"
-//                 : "top";
-//               // this.ctx.fillStyle = tickFontColor;
-//               this.ctx.fillText(label, 0, 0);
-//               this.ctx.restore();
-//             }
-//           },
-//           xScale
-//         );
-//       };
-//     }
-//   },
-//   afterDraw: function (chart: any) {
-//     // const status = _.get(chart, "options.status", null);
-//     // const ctx = chart.chart.ctx;
-//     // if (isNoData(status)) {
-//     //   chart.clear();
-//     //   const width = chart.chart.width;
-//     //   const height = chart.chart.height;
-//     //   let text = "";
-//     //   let color = get(chart, "options.scales.yAxes[0].ticks.fontColor", null);
-//     //   ctx.textAlign = "center";
-//     //   ctx.textBaseline = "middle";
-//     //   switch (status.status) {
-//     //     case ChartStatusEnum.NoData:
-//     //       text = "No data to display";
-//     //       break;
-//     //     case ChartStatusEnum.BadRequest:
-//     //       text = "Invalid Configuration";
-//     //       color = "#D27613";
-//     //       break;
-//     //     case ChartStatusEnum.LoadError:
-//     //       color = "#F56C6C";
-//     //       ctx.fillStyle = color;
-//     //       ctx.fillText(status.msg, width / 2, height / 2 + 20);
-//     //       text = "Internal Server Error";
-//     //       break;
-//     //     default:
-//     //       break;
-//     //   }
-//     //   ctx.font = "13px Arial";
-//     //   ctx.fillStyle = color;
-//     //   ctx.fillText(text, width / 2, height / 2);
-//     //   ctx.restore();
-//     // } else if (chart.options.isSeriesChart) {
-//     //   const chartArea = chart.chartArea;
-//     //   ctx.beginPath();
-//     //   ctx.lineWidth = 1;
-//     //   ctx.strokeStyle = _.get(
-//     //     chart,
-//     //     "options.scales.yAxes[0].gridLines.color",
-//     //     null
-//     //   );
-//     //   ctx.moveTo(chartArea.left, chartArea.bottom);
-//     //   ctx.lineTo(chartArea.right, chartArea.bottom);
-//     //   ctx.stroke();
-//     // }
-//   },
-// });
 Chart.register({
   id: "message",
   beforeDraw: function (chart: any, _args: any, _options: any): boolean {
-    const datasets = _.get(chart, "config._config.data.datasets", []);
+    const datasets = _.get(chart, "data.datasets", []);
     if (datasets.length <= 0) {
       // display no data message
       chart.clear();
       const ctx = chart.ctx;
-      const width = chart.canvas.clientWidth;
-      const height = chart.canvas.clientHeight;
+      const width = chart.width;
+      const height = chart.height;
       ctx.font = "14px Arial";
       ctx.fillStyle = "rgba(249, 249, 249, 0.6)";
       ctx.textAlign = "center";
@@ -228,10 +75,66 @@ Chart.register({
     }
     return true;
   },
-});
+} as any);
+
+export const DarkChart = {
+  options: {
+    scales: {
+      x: {
+        grid: {
+          color: "rgba(255, 255, 255, 0.1)",
+        },
+        ticks: {
+          color: "rgb(249, 249, 249)",
+        },
+      },
+      y: {
+        grid: {
+          color: "rgba(255, 255, 255, 0.1)",
+        },
+        ticks: {
+          color: "rgb(249, 249, 249)",
+        },
+      },
+    },
+  },
+};
+
+export const LightChart = {
+  options: {
+    scales: {
+      x: {
+        grid: {
+          color: "rgba(232,233,234,1)",
+        },
+        ticks: {
+          color: "rgba(28,31,35,0.8)",
+        },
+      },
+      y: {
+        grid: {
+          // color: "rgba(28,31,35,0.2)",
+          color: "rgba(232,233,234,1)",
+        },
+        ticks: {
+          color: "rgba(28,31,35,0.8)",
+        },
+      },
+    },
+  },
+};
+
+export function getChartThemeConfig(theme: Theme, raw: any) {
+  let chartTheme: any = LightChart;
+  if (theme === Theme.dark) {
+    chartTheme = DarkChart;
+  }
+  //IMPORTANT: need clone object, because merge return target object.
+  return _.cloneDeep(_.merge(raw, chartTheme));
+}
 
 export const DefaultChartConfig = {
-  type: undefined,
+  type: "line",
   data: {},
   plugins: {
     message: {},
@@ -240,6 +143,10 @@ export const DefaultChartConfig = {
     responsive: true,
     maintainAspectRatio: false,
     animation: false,
+    zoom: true,
+    legend: {
+      asTable: true,
+    },
     scales: {
       x: {
         type: "category",
@@ -250,7 +157,6 @@ export const DefaultChartConfig = {
           tickLength: 0,
           //       // drawOnChartArea: false,
           //       drawBorder: false,
-          color: "rgba(255, 255, 255, 0.1)",
         },
         ticks: {
           font: {
@@ -258,7 +164,6 @@ export const DefaultChartConfig = {
           },
           //       // fontSize: 10,
           maxRotation: 0, // angle in degrees
-          color: "rgb(249, 249, 249)",
           callback: function (_value: any, index: number, _values: any) {
             const times = _.get(this, "chart.config._config.data.times", []);
             const labels = _.get(this, "chart.config._config.data.labels", []);
@@ -284,14 +189,12 @@ export const DefaultChartConfig = {
           //       drawBorder: false,
           //       // drawOnChartArea: false,
           //       // borderDash: [1, 1],
-          color: "rgba(255, 255, 255, 0.1)",
         },
         ticks: {
           //       mirror: true, // draw tick in chart area
           //       display: true,
           //       // min: 0,
           font: { size: 12 },
-          color: "rgb(249, 249, 249)",
           // autoSkip: true,
           callback: function (value: any, index: number, _values: any) {
             // if (index == 0) {
@@ -299,9 +202,9 @@ export const DefaultChartConfig = {
             //   return null;
             // }
             if (index % 2 == 0) {
-              return formatter(
+              return FormatKit.format(
                 value,
-                _.get(this, "chart.config._config.unit", UnitEnum.None)
+                _.get(this, "chart.lin.extend.unit", Unit.Short)
               );
             }
             return null;
@@ -332,8 +235,8 @@ export const DefaultChartConfig = {
         fill: undefined,
       },
       point: {
-        radius: 1,
-        hoverRadius: 2,
+        radius: 0,
+        hoverRadius: 0,
         pointStyle: undefined,
       },
       arc: {

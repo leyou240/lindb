@@ -43,6 +43,8 @@ import (
 type TaskContext struct {
 	Ctx    context.Context
 	Cancel context.CancelFunc
+
+	Start time.Time
 }
 
 // NewTaskContextWithTimeout creates a task context with timeout.
@@ -51,6 +53,7 @@ func NewTaskContextWithTimeout(ctx context.Context, timeout time.Duration) *Task
 	return &TaskContext{
 		Ctx:    c,
 		Cancel: cancel,
+		Start:  time.Now(),
 	}
 }
 
@@ -87,8 +90,6 @@ type StorageExecuteContext struct {
 	GroupByTagKeyIDs []tag.KeyID
 	// for group by query store tag value ids for each group tag key
 	GroupingTagValueIDs []*roaring.Bitmap
-
-	Stats *models.StorageStats // storage query stats track for explain query
 
 	mutex sync.Mutex
 }
@@ -150,14 +151,6 @@ func (ctx *StorageExecuteContext) SortFields() {
 	sort.Slice(ctx.Fields, func(i, j int) bool {
 		return ctx.Fields[i].ID < ctx.Fields[j].ID
 	})
-}
-
-// QueryStats returns the storage query stats.
-func (ctx *StorageExecuteContext) QueryStats() *models.StorageStats {
-	if ctx.Stats != nil {
-		ctx.Stats.Complete()
-	}
-	return ctx.Stats
 }
 
 // Release releases context's resource after query.

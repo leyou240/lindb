@@ -23,6 +23,7 @@ showStmt                : showMasterStmt
                         | showBrokerMetricStmt
                         | showStorageMetricStmt
                         | showReplicationStmt
+                        | showMemoryDatabaseStmt
                         | showSchemasStmt
                         | showDatabaseStmt
                         | showNameSpacesStmt
@@ -30,9 +31,13 @@ showStmt                : showMasterStmt
                         | showFieldsStmt
                         | showTagKeysStmt
                         | showTagValuesStmt
+						| showRequestsStmt
+						| showRequestStmt
                         ;
 //meta data query statement
 showMasterStmt       : T_SHOW T_MASTER ;
+showRequestsStmt     : T_SHOW T_REQUESTS ; 
+showRequestStmt      : T_SHOW T_REQUEST T_WHERE T_ID T_EQUAL requestID;
 showStoragesStmt     : T_SHOW T_STORAGES ;
 showMetadataTypesStmt: T_SHOW T_METADATA T_TYPES;
 showBrokerMetaStmt   : T_SHOW T_BROKER T_METADATA T_FROM source T_WHERE typeFilter;
@@ -40,6 +45,7 @@ showMasterMetaStmt   : T_SHOW T_MASTER T_METADATA T_FROM source T_WHERE typeFilt
 showStorageMetaStmt  : T_SHOW T_STORAGE T_METADATA T_FROM source T_WHERE (storageFilter|typeFilter) T_AND (storageFilter|typeFilter);
 showAliveStmt        : T_SHOW (T_BROKER | T_STORAGE) T_ALIVE;
 showReplicationStmt  : T_SHOW T_REPLICATION T_WHERE (storageFilter|databaseFilter) T_AND (storageFilter|databaseFilter);
+showMemoryDatabaseStmt  : T_SHOW T_MEMORY T_DATASBAE T_WHERE (storageFilter|databaseFilter) T_AND (storageFilter|databaseFilter);
 showBrokerMetricStmt : T_SHOW T_BROKER T_METRIC T_WHERE metricListFilter ;
 showStorageMetricStmt: T_SHOW T_STORAGE T_METRIC T_WHERE (storageFilter|metricListFilter) T_AND (storageFilter|metricListFilter) ;
 createStorageStmt    : T_CREATE T_STORAGE json;
@@ -56,6 +62,7 @@ prefix               : ident ;
 withTagKey           : ident ;
 namespace            : ident ;
 databaseName         : ident ;
+requestID            : ident ;
 source               : (T_STATE_MACHINE|T_STATE_REPO) ;
 
 //data query plan
@@ -207,6 +214,7 @@ nonReservedWords      :
                         | T_INTERVAL_NAME
                         | T_SHARD
                         | T_REPLICATION
+                        | T_MEMORY
                         | T_TTL
                         | T_META_TTL
                         | T_PAST_TTL
@@ -290,6 +298,9 @@ nonReservedWords      :
                         | T_SCHEMAS
                         | T_STATE_REPO
                         | T_STATE_MACHINE
+                        | T_REQUESTS
+                        | T_REQUEST
+                        | T_ID
                         ;
 
 STRING
@@ -329,6 +340,7 @@ T_INTERVAL           : I N T E R V A L                  ;
 T_INTERVAL_NAME      : N A M E                          ;
 T_SHARD              : S H A R D                        ;
 T_REPLICATION        : R E P L I C A T I O N            ;
+T_MEMORY             : M E M O R Y                      ;
 T_TTL                : T T L                            ;
 T_META_TTL           : M E T A T T L                    ;
 T_PAST_TTL           : P A S T T T L                    ;
@@ -396,6 +408,9 @@ T_IN                 : I N                              ;
 
 T_LOG                : L O G                            ;
 T_PROFILE            : P R O F I L E                    ;
+T_REQUESTS           : R E Q U E S T S                  ;
+T_REQUEST            : R E Q U E S T                    ;
+T_ID                 : I D                              ;
 
 T_SUM                : S U M                            ;
 T_MIN                : M I N                            ;

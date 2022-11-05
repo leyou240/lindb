@@ -21,6 +21,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"sync"
 	"testing"
 	"time"
 
@@ -419,15 +420,22 @@ func TestFamilyChannel_writeTask(t *testing.T) {
 				chunk := NewMockChunk(ctrl)
 				f.chunk = chunk
 				chunk.EXPECT().IsEmpty().Return(true).AnyTimes()
-				f.newWriteStreamFn = func(ctx context.Context, target models.Node,
-					database string, shardState *models.ShardState, familyTime int64,
-					fct rpc.ClientStreamFactory) (rpc.WriteStream, error) {
+				lastCh := make(chan struct{})
+				f.newWriteStreamFn = func(_ context.Context, _ models.Node,
+					_ string, _ *models.ShardState, _ int64,
+					_ rpc.ClientStreamFactory) (rpc.WriteStream, error) {
+					time.Sleep(100 * time.Millisecond)
 					return nil, fmt.Errorf("err")
 				}
+				// put chunk frist
+				f.ch <- &compressedChunk{1, 2, 3}
 				go func() {
 					f.cancel()
-					f.ch <- &compressedChunk{1, 2, 3}
-					time.Sleep(5 * time.Millisecond)
+					go func() {
+						f.ch <- &compressedChunk{1, 2, 3}
+						lastCh <- struct{}{}
+					}()
+					<-lastCh
 					close(f.ch)
 				}()
 			},
@@ -510,7 +518,7 @@ func TestFamilyChannel_writeTask(t *testing.T) {
 
 	for _, tt := range cases {
 		tt := tt
-		t.Run(tt.name, func(t *testing.T) {
+		t.Run(tt.name, func(_ *testing.T) {
 			ctx, cancel := context.WithCancel(context.TODO())
 			f := &familyChannel{
 				cancel:              cancel,
@@ -536,4 +544,21 @@ func TestFamilyChannel_writeTask(t *testing.T) {
 			f.writeTask(context.TODO())
 		})
 	}
+}
+
+func TestFamilyChannel_sendingLastMessage(t *testing.T) {
+	f := &familyChannel{
+		ch:     make(chan *compressedChunk, 2),
+		logger: logger.GetLogger("Replica", "Test"),
+	}
+	f.ch <- &compressedChunk{}
+	var wait sync.WaitGroup
+	wait.Add(1)
+	go func() {
+		f.sendPendingMessage(func(_ *compressedChunk) {
+		})
+		wait.Done()
+	}()
+	close(f.ch)
+	wait.Wait()
 }

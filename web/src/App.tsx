@@ -16,39 +16,10 @@ KIND, either express or implied.  See the License for the
 specific language governing permissions and limitations
 under the License.
 */
-import { ChartTooltip } from "@src/components";
 import { Console } from "@src/pages";
 import { URLStore } from "@src/stores";
 import React from "react";
 import { Route, Switch, useHistory } from "react-router-dom";
-import * as monaco from "monaco-editor";
-import editorWorker from "monaco-editor/esm/vs/editor/editor.worker?worker";
-import jsonWorker from "monaco-editor/esm/vs/language/json/json.worker?worker";
-
-//@ts-ignore
-self.MonacoEnvironment = {
-  getWorker(_: any, label: any) {
-    if (label === "json") {
-      return new jsonWorker();
-    }
-    return new editorWorker();
-  },
-};
-
-monaco.editor.defineTheme("lindb", {
-  base: "vs-dark",
-  inherit: true,
-  rules: [
-    { token: "string.sql", foreground: "ce9178" },
-    // { token: "identifier.sql", foreground: "ce9178" },
-  ],
-  colors: {
-    // "editor.foreground": "#f38518", #010f17 identifier
-    "editor.background": "#021627",
-    "editor.lineHighlight": "#f38518",
-    "editor.lineHighlightBackground": "#010f17",
-  },
-});
 
 export default function App() {
   const history = useHistory();
@@ -60,7 +31,6 @@ export default function App() {
       <Switch>
         <Route path="/" component={Console} />
       </Switch>
-      <ChartTooltip />
     </>
   );
 }

@@ -63,22 +63,6 @@ func (api *BrokerStateMachineAPI) Register(route gin.IRoutes) {
 }
 
 // Explore explores the state from state machine of broker/master/storage.
-// @BasePath /api/v1
-// @Summary explore the state from state machine.
-// @Schemes
-// @Description explores the state from state machine of current node.
-// @Description 1. Broker State Machine;
-// @Description 2. Master State Machine;
-// @Description 3. Storage State Machine;
-// @Tags Internal
-// @Accept json
-// @Param param body Param ture "param data"
-// @Produce json
-// @Success 200 {array} models.Database
-// @Success 200 {array} models.StorageState
-// @Failure 404 {string} string "not found"
-// @Failure 500 {string} string "internal error"
-// @Router /state/machine/explore [get]
 func (api *BrokerStateMachineAPI) Explore(c *gin.Context) {
 	param := &Param{}
 	err := c.ShouldBindQuery(param)
@@ -132,6 +116,9 @@ func (api *BrokerStateMachineAPI) exploreMaster(c *gin.Context, param *Param) {
 			return shardAssignments[i].Name < shardAssignments[j].Name
 		})
 		http.OK(c, shardAssignments)
+	case constants.Master:
+		// return master slice, because common logic read state from repo.
+		http.OK(c, []*models.Master{api.deps.Master.GetMaster()})
 	default:
 		http.NotFound(c)
 	}

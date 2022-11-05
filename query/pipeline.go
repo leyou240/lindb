@@ -20,7 +20,11 @@ package query
 import (
 	"github.com/google/uuid"
 
+	"github.com/lindb/lindb/models"
+	errorpkg "github.com/lindb/lindb/pkg/error"
+	"github.com/lindb/lindb/pkg/logger"
 	stagepkg "github.com/lindb/lindb/query/stage"
+	trackerpkg "github.com/lindb/lindb/query/tracker"
 )
 
 //go:generate mockgen -source=./pipeline.go -destination=./pipeline_mock.go -package=query
@@ -29,56 +33,73 @@ import (
 type Pipeline interface {
 	// Execute executes the stage(sub plan tree).
 	Execute(stage stagepkg.Stage)
+	// Stats returns the stats of stages.
+	Stats() []*models.StageStats
 }
 
 // pipeline implements Pipeline interface.
 type pipeline struct {
 	sm *pipelineStateMachine
+
+	logger *logger.Logger
 }
 
 // NewExecutePipeline creates a Pipeline instance for executing query stage.
-func NewExecutePipeline(needStats bool, completeCallback func(err error)) Pipeline {
+func NewExecutePipeline(tracker *trackerpkg.StageTracker, completeCallback func(err error)) Pipeline {
 	return &pipeline{
-		sm: newPipelineStateMachine(needStats, completeCallback),
+		sm:     newPipelineStateMachine(tracker, completeCallback),
+		logger: logger.GetLogger("Query", "Pipeline"),
 	}
 }
 
 // Execute executes the stage(sub plan tree).
 func (p *pipeline) Execute(stage stagepkg.Stage) {
-	p.executeStage(stage)
+	defer func() {
+		if r := recover(); r != nil {
+			err := errorpkg.Error(r)
+			p.sm.complete(err)
+			p.logger.Error("execute query pipeline panic", logger.Error(err), logger.Stack())
+		}
+	}()
+
+	p.executeStage("", stage)
+}
+
+// Stats returns the stats of stages.
+func (p *pipeline) Stats() []*models.StageStats {
+	return p.sm.GetStats()
 }
 
 // executeStage executes current the plan tree of current stage,
 // if it executes success, plan next stages and executes them.
 //
-//       +----------------+ 1.Plan&Execute +-----------+
-//       | current stage  |--------------->| plan tree |
-//       +----------------+                +-----------+
-//               | 2. Plan Next Stages
-//               v
-//  +-------------------------+
-//  |  +-------+   +-------+  |
-//  |  |stage1 |   |stage2 |  |
-//  |  +-------+   +-------+  |
-//  +-------------------------+
-func (p *pipeline) executeStage(stage stagepkg.Stage) {
+//	     +----------------+ 1.Plan&Execute +-----------+
+//	     | current stage  |--------------->| plan tree |
+//	     +----------------+                +-----------+
+//	             | 2. Plan Next Stages
+//	             v
+//	+-------------------------+
+//	|  +-------+   +-------+  |
+//	|  |stage1 |   |stage2 |  |
+//	|  +-------+   +-------+  |
+//	+-------------------------+
+func (p *pipeline) executeStage(parentStageID string, stage stagepkg.Stage) {
 	if stage == nil || p.sm.isCompleted() {
 		return
 	}
 
 	stageID := uuid.New().String()
-	p.sm.executeStage(stageID, stage)
+	p.sm.executeStage(parentStageID, stageID, stage)
 
 	stage.Execute(stage.Plan(), func() {
 		// after current stage execute completed, then plan next stages
 		nextStages := stage.NextStages()
 		for idx := range nextStages {
-			p.executeStage(nextStages[idx])
+			p.executeStage(stageID, nextStages[idx])
 		}
 
 		// completed current stage, change stage state
 		p.sm.completeStage(stageID, nil)
-		stage.Complete()
 	}, func(err error) {
 		// complete stage with err
 		p.sm.completeStage(stageID, err)

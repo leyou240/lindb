@@ -85,7 +85,9 @@ type replicatorRunner struct {
 	replicatorType string
 	replicator     Replicator
 
-	closed chan struct{}
+	closed          chan struct{}
+	sleep, maxSleep int
+	sleepFn         func(d time.Duration)
 
 	statistics *metrics.StorageReplicatorRunnerStatistics
 	logger     *logger.Logger
@@ -103,6 +105,9 @@ func newReplicatorRunner(replicator Replicator) *replicatorRunner {
 		replicatorType: replicaType,
 		running:        atomic.NewBool(false),
 		closed:         make(chan struct{}),
+		sleep:          0,
+		sleepFn:        time.Sleep,
+		maxSleep:       2 * 10 * 1000, // 20 sec
 		statistics:     metrics.NewStorageReplicatorRunnerStatistics(replicaType, state.Database, state.ShardID.String()),
 		logger:         logger.GetLogger("Replica", "ReplicatorRunner"),
 	}
@@ -134,6 +139,8 @@ func (r *replicatorRunner) loop(ctx context.Context) {
 		r.replica(ctx)
 	}
 
+	// close replicator
+	r.replicator.Close()
 	// exit replica loop
 	close(r.closed)
 
@@ -161,10 +168,12 @@ func (r *replicatorRunner) replica(_ context.Context) {
 				logger.String("replicator", r.replicator.String()),
 				logger.Int64("index", seq))
 			hasData = true
+			r.sleep = 0
 			data, err := r.replicator.GetMessage(seq)
 			if err != nil {
+				r.replicator.IgnoreMessage(seq)
 				r.statistics.ConsumeMessageFailures.Incr()
-				r.logger.Warn("cannot get replica message data",
+				r.logger.Warn("cannot get replica message data, ignore replica message",
 					logger.String("replicator", r.replicator.String()),
 					logger.Int64("index", seq), logger.Error(err))
 			} else {
@@ -178,7 +187,13 @@ func (r *replicatorRunner) replica(_ context.Context) {
 		r.logger.Warn("replica is not ready", logger.String("replicator", r.replicator.String()))
 	}
 	if !hasData {
-		// TODO add config?
-		time.Sleep(10 * time.Millisecond)
+		sleep := 2 << r.sleep
+		if sleep < r.maxSleep {
+			r.sleep++
+		}
+		if sleep > r.maxSleep {
+			sleep = r.maxSleep
+		}
+		r.sleepFn(time.Duration(sleep) * time.Millisecond)
 	}
 }

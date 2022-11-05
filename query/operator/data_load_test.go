@@ -86,3 +86,20 @@ func TestDataLoader_Execute(t *testing.T) {
 		assert.NoError(t, op.Execute())
 	})
 }
+
+func TestDataLoad_Stats(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	rs := flow.NewMockFilterResultSet(ctrl)
+	segment := &flow.TimeSegmentResultSet{FilterRS: []flow.FilterResultSet{rs}}
+	op := NewDataLoad(nil, segment, rs)
+	op1 := op.(TrackableOperator)
+	assert.NotNil(t, op1.Stats())
+
+	rs.EXPECT().Identifier().Return("tt")
+	assert.Equal(t, "Data Load[tt]", op.Identifier())
+
+	rs.EXPECT().Identifier().Return("segment/day/tt")
+	assert.Equal(t, "Data Load[/day/tt]", op.Identifier())
+}

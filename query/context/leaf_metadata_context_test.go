@@ -15,18 +15,29 @@
 // specific language governing permissions and limitations
 // under the License.
 
-//go:build !windows
+package context
 
-package memdb
+import (
+	"fmt"
+	"testing"
 
-import "github.com/lindb/lindb/pkg/logger"
+	"github.com/stretchr/testify/assert"
 
-// closeBuffer just closes file for unix.
-func (d *dataPointBuffer) closeBuffer() {
-	for _, f := range d.files {
-		if err := f.Close(); err != nil {
-			memDBLogger.Error("close file in memory database err",
-				logger.String("file", d.path), logger.Error(err))
-		}
+	"github.com/lindb/lindb/constants"
+	stmtpkg "github.com/lindb/lindb/sql/stmt"
+)
+
+func TestLeafMetadataContext(t *testing.T) {
+	ctx := NewLeafMetadataContext(&stmtpkg.MetricMetadata{}, nil, nil)
+	assert.Equal(t, constants.MaxSuggestions, ctx.Limit)
+	for i := 0; i < 1000; i++ {
+		ctx.AddValue(fmt.Sprintf("value-%d", i))
 	}
+	assert.Len(t, ctx.ResultSet, constants.MaxSuggestions)
+
+	ctx = NewLeafMetadataContext(&stmtpkg.MetricMetadata{Limit: 50}, nil, nil)
+	assert.Equal(t, 50, ctx.Limit)
+
+	ctx = NewLeafMetadataContext(&stmtpkg.MetricMetadata{Limit: 500}, nil, nil)
+	assert.Equal(t, constants.MaxSuggestions, ctx.Limit)
 }

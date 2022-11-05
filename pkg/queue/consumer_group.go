@@ -91,10 +91,7 @@ func NewConsumerGroup(parent, fanOutPath string, q FanOutQueue) (ConsumerGroup, 
 		}
 	}()
 
-	hasMeta := false
-	if existFunc(filepath.Join(name, fmt.Sprintf("%d.bat", metaPageIndex))) {
-		hasMeta = true
-	}
+	hasMeta := existFunc(filepath.Join(name, fmt.Sprintf("%d.bat", metaPageIndex)))
 
 	metaPage, err := metaPageFct.AcquirePage(metaPageIndex)
 	if err != nil {
@@ -180,6 +177,9 @@ func (f *consumerGroup) Ack(ackSeq int64) {
 		if err := f.metaPage.Sync(); err != nil {
 			queueLogger.Error("sync consumerGroup meta page error", logger.String("consumerGroup", f.name), logger.Error(err))
 		}
+	} else {
+		queueLogger.Warn("ack failure, invalid ack seq", logger.Int64("ack", ackSeq),
+			logger.Int64("lastAck", ts), logger.Int64("consumedSeq", hs))
 	}
 }
 
@@ -212,7 +212,11 @@ func (f *consumerGroup) Pending() int64 {
 	fh := f.ConsumedSeq()
 	qh := f.q.Queue().AppendedSeq()
 
-	return qh - fh
+	pending := qh - fh
+	if pending < 0 {
+		return 0
+	}
+	return pending
 }
 
 // IsEmpty returns if fan out consumer cannot consume any data.
@@ -222,7 +226,7 @@ func (f *consumerGroup) IsEmpty() bool {
 
 	qh := f.q.Queue().AppendedSeq()
 
-	return qh == f.AcknowledgedSeq()
+	return qh <= f.AcknowledgedSeq()
 }
 
 // Close persists headSeq, tailSeq.

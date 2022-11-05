@@ -29,6 +29,7 @@ import (
 	"go.uber.org/atomic"
 
 	"github.com/lindb/lindb/models"
+	"github.com/lindb/lindb/pkg/logger"
 	"github.com/lindb/lindb/pkg/queue"
 )
 
@@ -39,6 +40,7 @@ func TestReplicatorPeer(t *testing.T) {
 	}()
 
 	mockReplicator := NewMockReplicator(ctrl)
+	mockReplicator.EXPECT().Close().AnyTimes()
 	mockReplicator.EXPECT().Pending().Return(int64(10)).AnyTimes()
 	mockReplicator.EXPECT().IsReady().Return(false).AnyTimes()
 	mockReplicator.EXPECT().String().Return("str").AnyTimes()
@@ -90,6 +92,8 @@ func TestNewReplicator_runner(t *testing.T) {
 	replicator.EXPECT().String().Return("str").AnyTimes()
 	replicator.EXPECT().ReplicaState().Return(&models.ReplicaState{}).AnyTimes()
 	replicator.EXPECT().Pending().Return(int64(19)).AnyTimes()
+	replicator.EXPECT().Close().AnyTimes()
+	replicator.EXPECT().IgnoreMessage(gomock.Any()).AnyTimes()
 	peer := NewReplicatorPeer(replicator)
 	var wait sync.WaitGroup
 
@@ -165,4 +169,22 @@ func TestReplicatorPeer_replica_panic(t *testing.T) {
 	assert.Panics(t, func() {
 		r.replica(context.TODO())
 	})
+}
+
+func TestReplicatorPeer_replicaNoData(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	replicator := NewMockReplicator(ctrl)
+	r := &replicatorRunner{
+		replicator: replicator,
+		sleepFn:    func(d time.Duration) {},
+		logger:     logger.GetLogger("Replica", "Test"),
+	}
+	replicator.EXPECT().IsReady().Return(false).AnyTimes()
+	replicator.EXPECT().String().Return("test").AnyTimes()
+
+	for i := 0; i < 100; i++ {
+		r.replica(context.TODO())
+	}
 }

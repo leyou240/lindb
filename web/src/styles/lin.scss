@@ -1,9 +1,5 @@
 
 .lin-table {
-    .semi-empty-image {
-        height: 150px !important;
-        width: 150px;
-    }
 
     .semi-descriptions-item-th {
         padding-right: 8px;
@@ -19,6 +15,15 @@
         padding-bottom: 6px;
         padding-right: 12px;
     }
+	.semi-typography a{
+		cursor: default;
+	}
+}
+
+.lin-description{
+	.semi-typography a{
+		cursor: default;
+	}
 }
 
 .lin-stats {
@@ -64,3 +69,49 @@
 .lin-link {
     cursor: pointer;
 }
+
+.lin-explain-timeline {
+    height: 14px;
+    width: 100px;
+    border: 1px solid var(--semi-color-fill-2);
+	.inner {
+		height: 12px;
+		min-width: 1px;
+	}
+}
+
+.lin-nav .semi-navigation-header-list-outer {
+	overflow: hidden;
+    display: flex;
+    flex-direction: column;
+}
+
+.lin-nav .semi-navigation-list {
+	overflow: auto;
+}
+
+.lin-tree{
+  width: 100%;
+  .semi-tree-option-list {
+	  padding:0;
+  }
+}
+
+.lin-spin {
+	svg {
+		margin-left: 10px;
+	}
+}
+
+.lin-small-space {
+	column-gap:2px !important;
+}
+.lin-variate-form .semi-form-field {
+	padding-right:12px;
+}
+
+::selection {
+    color: #fff;
+    text-shadow: none;
+    background: var(--semi-color-primary);
+} 

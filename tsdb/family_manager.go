@@ -27,6 +27,7 @@ var (
 )
 
 // GetFamilyManager returns the data family manager singleton instance.
+// FIXME: need clean readonly family when no read long term
 func GetFamilyManager() FamilyManager {
 	once4FamilyManager.Do(func() {
 		fManager = newFamilyManager()
@@ -68,7 +69,7 @@ func (sm *familyManager) RemoveFamily(family DataFamily) {
 
 // WalkEntry walks each family entry via fn.
 func (sm *familyManager) WalkEntry(fn func(family DataFamily)) {
-	sm.families.Range(func(key, value interface{}) bool {
+	sm.families.Range(func(_, value interface{}) bool {
 		family := value.(DataFamily)
 		fn(family)
 		return true
@@ -77,7 +78,7 @@ func (sm *familyManager) WalkEntry(fn func(family DataFamily)) {
 
 // GetFamiliesByShard returns families for spec shard.
 func (sm *familyManager) GetFamiliesByShard(shard Shard) (rs []DataFamily) {
-	sm.families.Range(func(key, value interface{}) bool {
+	sm.families.Range(func(_, value interface{}) bool {
 		family := value.(DataFamily)
 		if family.Shard().Indicator() == shard.Indicator() {
 			rs = append(rs, family)

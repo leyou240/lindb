@@ -190,6 +190,9 @@ func TestConsumerGroup_one_consumer(t *testing.T) {
 	assert.Equal(t, fseq, f1.AcknowledgedSeq())
 	assert.Equal(t, int64(0), f1.Pending())
 
+	f1.Ack(100) // akc invalid seq
+	assert.Equal(t, fseq, f1.AcknowledgedSeq())
+
 	fq.Close()
 	// reopen
 	fq, err = NewFanOutQueue(dir, 1024)
@@ -199,6 +202,9 @@ func TestConsumerGroup_one_consumer(t *testing.T) {
 	assert.Equal(t, int64(2), f1.AcknowledgedSeq())
 	assert.Equal(t, int64(2), f1.ConsumedSeq())
 	assert.Equal(t, int64(0), f1.Pending())
+	fq.Queue().SetAppendedSeq(0)
+	assert.Equal(t, int64(0), f1.Pending())
+	assert.True(t, f1.IsEmpty())
 	fq.Close()
 }
 

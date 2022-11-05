@@ -26,6 +26,8 @@ import (
 
 	"go.uber.org/atomic"
 
+	"github.com/lindb/common/pkg/fasttime"
+
 	"github.com/lindb/lindb/config"
 	"github.com/lindb/lindb/flow"
 	"github.com/lindb/lindb/kv"
@@ -75,6 +77,15 @@ type DataFamily interface {
 
 	// GetState returns the current state include memory database state.
 	GetState() models.DataFamilyState
+	// Evict evicts family if long term no data write.
+	Evict()
+	// Compact compacts all data if long term no data write.
+	Compact()
+	// Retain increments write ref count
+	Retain()
+	// Release decrements write ref count,
+	// if ref==0, no data will write this family.
+	Release()
 
 	// DataFilter filters data under data family based on query condition
 	flow.DataFilter
@@ -83,13 +94,15 @@ type DataFamily interface {
 
 // dataFamily represents a wrapper of kv store's family with basic info
 type dataFamily struct {
-	indicator    string // database + shard + family time
-	shard        Shard
-	interval     timeutil.Interval
-	intervalCalc timeutil.IntervalCalculator
-	familyTime   int64
-	timeRange    timeutil.TimeRange
-	family       kv.Family
+	indicator     string // database + shard + family time
+	shard         Shard
+	segment       Segment
+	interval      timeutil.Interval
+	intervalCalc  timeutil.IntervalCalculator
+	familyTime    int64
+	timeRange     timeutil.TimeRange
+	family        kv.Family
+	lastFlushTime int64
 
 	mutableMemDB   memdb.MemoryDatabase
 	immutableMemDB memdb.MemoryDatabase
@@ -104,7 +117,9 @@ type dataFamily struct {
 	isFlushing     atomic.Bool    // restrict flusher concurrency
 	flushCondition sync.WaitGroup // flush condition
 
-	mutex sync.Mutex
+	ref          atomic.Int32 // ref count for writing
+	lastReadTime *atomic.Int64
+	mutex        sync.Mutex
 
 	statistics *metrics.FamilyStatistics
 	logger     *logger.Logger
@@ -113,6 +128,7 @@ type dataFamily struct {
 // newDataFamily creates a data family storage unit
 func newDataFamily(
 	shard Shard,
+	segment Segment,
 	interval timeutil.Interval,
 	timeRange timeutil.TimeRange,
 	familyTime int64,
@@ -121,17 +137,21 @@ func newDataFamily(
 	dbName := shard.Database().Name()
 	shardIDStr := strconv.Itoa(int(shard.ShardID()))
 	f := &dataFamily{
-		shard:        shard,
-		interval:     interval,
-		intervalCalc: interval.Calculator(),
-		timeRange:    timeRange,
-		familyTime:   familyTime,
-		family:       family,
-		seq:          make(map[int32]atomic.Int64),
-		persistSeq:   make(map[int32]atomic.Int64),
-		callbacks:    make(map[int32][]func(seq int64)),
-		statistics:   metrics.NewFamilyStatistics(dbName, shardIDStr),
-		logger:       logger.GetLogger("TSDB", "Family"),
+		shard:         shard,
+		segment:       segment,
+		interval:      interval,
+		intervalCalc:  interval.Calculator(),
+		timeRange:     timeRange,
+		familyTime:    familyTime,
+		family:        family,
+		lastFlushTime: timeutil.Now(),
+		seq:           make(map[int32]atomic.Int64),
+		persistSeq:    make(map[int32]atomic.Int64),
+		callbacks:     make(map[int32][]func(seq int64)),
+		lastReadTime:  atomic.NewInt64(fasttime.UnixMilliseconds()),
+
+		statistics: metrics.NewFamilyStatistics(dbName, shardIDStr),
+		logger:     logger.GetLogger("TSDB", "Family"),
 	}
 	// get current persist write sequence
 	snapshot := family.GetSnapshot()
@@ -178,6 +198,7 @@ func (f *dataFamily) Family() kv.Family {
 	return f.family
 }
 
+// FamilyTime returns the timestamp of family.
 func (f *dataFamily) FamilyTime() int64 {
 	return f.familyTime
 }
@@ -195,7 +216,7 @@ func (f *dataFamily) NeedFlush() bool {
 		// check immutable memory database, make sure it is nil
 		return false
 	}
-	if f.mutableMemDB == nil || f.mutableMemDB.Size() <= 0 {
+	if f.mutableMemDB == nil || f.mutableMemDB.NumOfMetrics() <= 0 {
 		// no data
 		return false
 	}
@@ -243,7 +264,7 @@ func (f *dataFamily) Flush() error {
 
 		// add lock when switch memory database
 		f.mutex.Lock()
-		if f.immutableMemDB != nil || f.mutableMemDB == nil || f.mutableMemDB.Size() == 0 {
+		if f.immutableMemDB != nil || f.mutableMemDB == nil || f.mutableMemDB.NumOfMetrics() == 0 {
 			// if immutable memory database not nil or no data need flush, return it
 			f.mutex.Unlock()
 			return nil
@@ -268,20 +289,15 @@ func (f *dataFamily) Flush() error {
 		f.mutex.Lock()
 		f.immutableMemDB = nil
 		f.immutableSeq = nil
-		// save persisted sequence
+		// save persisted sequence, ack replica sequence in flushMemoryDatabase func
 		for leader, seq := range immutableSeq {
 			f.persistSeq[leader] = *atomic.NewInt64(seq)
-			// ack replica sequence
-			if fns, ok := f.callbacks[leader]; ok {
-				for _, fn := range fns {
-					fn(seq)
-				}
-			}
 		}
 
 		f.mutex.Unlock()
 
 		endTime := time.Now()
+		f.lastFlushTime = endTime.UnixMilli()
 		f.logger.Info("flush memory database successfully",
 			logger.String("family", f.indicator),
 			logger.String("flush-duration", endTime.Sub(startTime).String()),
@@ -291,6 +307,70 @@ func (f *dataFamily) Flush() error {
 
 	// another flush process is running
 	return nil
+}
+
+// Compact compacts all data if long term no data write.
+func (f *dataFamily) Compact() {
+	f.mutex.Lock()
+	defer f.mutex.Unlock()
+	if f.mutableMemDB != nil || f.immutableMemDB != nil {
+		return
+	}
+
+	diff := fasttime.UnixMilliseconds() - f.lastFlushTime - 2*timeutil.OneHour
+	if diff >= 0 {
+		// long term no data write, does full compact
+		f.family.Compact()
+	}
+}
+
+// Retain increments write ref count
+func (f *dataFamily) Retain() {
+	f.ref.Inc()
+}
+
+// Release decrements write ref count,
+// if ref==0, no data will write this family.
+func (f *dataFamily) Release() {
+	f.ref.Dec()
+}
+
+// Evict evicts family if long term no data write.
+func (f *dataFamily) Evict() {
+	ref := f.ref.Load()
+	if ref > 0 {
+		return
+	}
+
+	f.mutex.Lock()
+	if f.mutableMemDB != nil || f.immutableMemDB != nil {
+		f.mutex.Unlock()
+		return
+	}
+	f.mutex.Unlock()
+
+	now := timeutil.Now()
+	ahead, _ := f.shard.Database().GetOption().GetAcceptWritableRange()
+	diff := now - f.familyTime - 6*timeutil.OneHour
+	f.logger.Info("check family if expire",
+		logger.String("baseTime", timeutil.FormatTimestamp(f.familyTime, timeutil.DataTimeFormat2)),
+		logger.String("lastRead", timeutil.FormatTimestamp(f.lastReadTime.Load(), timeutil.DataTimeFormat2)),
+		logger.Any("ahead", time.Duration(ahead).String()), logger.String("diff", time.Duration(diff).String()))
+	if diff <= ahead {
+		return
+	}
+	diff = now - f.lastReadTime.Load() - 2*timeutil.OneHour
+	if diff > ahead {
+		if err := closeFamilyFunc(f); err != nil {
+			f.logger.Error("close family err when evict", logger.String("family", f.Indicator()))
+		} else {
+			f.segment.EvictFamily(f.familyTime)
+		}
+	}
+}
+
+func closeFamily(f *dataFamily) error {
+	return f.Close()
 }
 
 // MemDBSize returns memory database heap size.
@@ -306,6 +386,7 @@ func (f *dataFamily) MemDBSize() int64 {
 // Filter filters the data based on metric/version/seriesIDs,
 // if it finds data then returns the FilterResultSet, else returns nil
 func (f *dataFamily) Filter(executeCtx *flow.ShardExecuteContext) (resultSet []flow.FilterResultSet, err error) {
+	f.lastReadTime.Store(fasttime.UnixMilliseconds())
 	memRS, err := f.memoryFilter(executeCtx)
 	if err != nil {
 		return nil, err
@@ -339,10 +420,11 @@ func (f *dataFamily) GetState() models.DataFamilyState {
 
 	memoryDBState := func(state string, memoryDatabase memdb.MemoryDatabase) {
 		memoryDatabaseState = append(memoryDatabaseState, models.MemoryDatabaseState{
-			State:       state,
-			Uptime:      memoryDatabase.Uptime(),
-			MemSize:     memoryDatabase.MemSize(),
-			NumOfMetric: memoryDatabase.Size(),
+			State:        state,
+			Uptime:       memoryDatabase.Uptime(),
+			MemSize:      memoryDatabase.MemSize(),
+			NumOfMetrics: memoryDatabase.NumOfMetrics(),
+			NumOfSeries:  memoryDatabase.NumOfSeries(),
 		})
 	}
 
@@ -356,7 +438,7 @@ func (f *dataFamily) GetState() models.DataFamilyState {
 
 	state := models.DataFamilyState{
 		ShardID:          f.shard.ShardID(),
-		FamilyTime:       f.familyTime,
+		FamilyTime:       timeutil.FormatTimestamp(f.familyTime, timeutil.DataTimeFormat2),
 		AckSequences:     ackSequences,
 		ReplicaSequences: replicaSequences,
 		MemoryDatabases:  memoryDatabaseState,
@@ -533,6 +615,9 @@ func (f *dataFamily) GetOrCreateMemoryDatabase(familyTime int64) (memdb.MemoryDa
 
 // Close flushes memory database, then removes it from online family list.
 func (f *dataFamily) Close() error {
+	f.logger.Info("starting close data family", logger.String("family", f.indicator))
+	start := time.Now()
+
 	f.mutex.Lock()
 	defer f.mutex.Unlock()
 
@@ -555,6 +640,8 @@ func (f *dataFamily) Close() error {
 
 	GetFamilyManager().RemoveFamily(f)
 	f.statistics.ActiveFamilies.Decr()
+
+	f.logger.Info("close data family complete", logger.String("family", f.indicator), logger.Any("cost", time.Since(start)))
 	return nil
 }
 

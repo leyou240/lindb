@@ -16,8 +16,26 @@ KIND, either express or implied.  See the License for the
 specific language governing permissions and limitations
 under the License.
 */
-import React from "react";
 
-export default function ChartLegend() {
-  return null;
-}
+import React, { useRef, MutableRefObject } from "react";
+import { useIsInViewport } from "@src/hooks";
+
+const LazyLoad: React.FC<{ children: any }> = (props) => {
+  const { children } = props;
+  const divRef = useRef() as MutableRefObject<HTMLDivElement>;
+  const { isIntersecting } = useIsInViewport(divRef);
+
+  const render = () => {
+    if (isIntersecting) {
+      return children;
+    }
+    return null;
+  };
+  return (
+    <div style={{ height: "100%" }} ref={divRef}>
+      {render()}
+    </div>
+  );
+};
+
+export default LazyLoad;

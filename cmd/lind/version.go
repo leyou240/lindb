@@ -32,7 +32,8 @@ var (
 	// cfg path
 	cfg = ""
 	// enable swagger api doc
-	doc = false
+	doc  = false
+	myID = 1
 )
 
 func printVersion() {
@@ -42,7 +43,7 @@ func printVersion() {
 var versionCmd = &cobra.Command{
 	Use:   "version",
 	Short: "Print the version",
-	Run: func(cmd *cobra.Command, args []string) {
+	Run: func(_ *cobra.Command, _ []string) {
 		printVersion()
 		fmt.Printf("GOOS=%q\n", runtime.GOOS)
 		fmt.Printf("GOARCH=%q\n", runtime.GOARCH)

@@ -32,6 +32,7 @@ type listener struct {
 	useStmt            *useStmtParser
 	schemasStmt        *schemasStmtParser
 	storageStmt        *storageStmtParser
+	requestStmt        *requestStmtParser
 }
 
 // EnterQueryStmt is called when production queryStmt is entered.
@@ -42,6 +43,21 @@ func (l *listener) EnterQueryStmt(ctx *grammar.QueryStmtContext) {
 // EnterShowMetadataTypesStmt is called when production showMetadataTypesStmt is entered.
 func (l *listener) EnterShowMetadataTypesStmt(_ *grammar.ShowMetadataTypesStmtContext) {
 	l.metadataStmt = newMetadataStmtParser(stmt.MetadataTypes)
+}
+
+// EnterShowRequestsStmt is called when production showRequestssStmt is entered.
+func (l *listener) EnterShowRequestsStmt(_ *grammar.ShowRequestsStmtContext) {
+	l.requestStmt = newRequestStmtParse()
+}
+
+// EnterShowRequestStmt is called when production showRequestStmt is entered.
+func (l *listener) EnterShowRequestStmt(_ *grammar.ShowRequestStmtContext) {
+	l.requestStmt = newRequestStmtParse()
+}
+
+// EnterRequestID is called when production requestID is entered.
+func (l *listener) EnterRequestID(ctx *grammar.RequestIDContext) {
+	l.requestStmt.visitRequestID(ctx)
 }
 
 // EnterShowBrokerMetaStmt is called when production showBrokerMetaStmt is entered.
@@ -104,6 +120,11 @@ func (l *listener) EnterShowReplicationStmt(_ *grammar.ShowReplicationStmtContex
 	l.stateStmt = newStateStmtParse(stmt.Replication)
 }
 
+// EnterShowMemoryDatabaseStmt is called when production showMemoryDatabaseStmt is entered.
+func (l *listener) EnterShowMemoryDatabaseStmt(_ *grammar.ShowMemoryDatabaseStmtContext) {
+	l.stateStmt = newStateStmtParse(stmt.MemoryDatabase)
+}
+
 // EnterStorageFilter is called when production storageFilter is entered.
 func (l *listener) EnterStorageFilter(ctx *grammar.StorageFilterContext) {
 	switch {
@@ -125,7 +146,7 @@ func (l *listener) EnterShowStoragesStmt(_ *grammar.ShowStoragesStmtContext) {
 }
 
 // EnterJson is called when production json is entered.
-func (l *listener) EnterJson(ctx *grammar.JsonContext) { // nolint:stylecheck
+func (l *listener) EnterJson(ctx *grammar.JsonContext) { //nolint:stylecheck
 	switch {
 	case l.storageStmt != nil:
 		l.storageStmt.visitCfg(ctx)
@@ -339,6 +360,20 @@ func (l *listener) EnterGroupByKey(ctx *grammar.GroupByKeyContext) {
 	}
 }
 
+// EnterSortField is called when production sortField is entered.
+func (l *listener) EnterSortField(ctx *grammar.SortFieldContext) {
+	if l.queryStmt != nil {
+		l.queryStmt.visitSortField(ctx)
+	}
+}
+
+// ExitSortField is called when production sortField is exited.
+func (l *listener) ExitSortField(ctx *grammar.SortFieldContext) {
+	if l.queryStmt != nil {
+		l.queryStmt.completeSortField(ctx)
+	}
+}
+
 // statement returns query statement, if failure return error
 func (l *listener) statement() (stmt.Statement, error) {
 	switch {
@@ -356,6 +391,8 @@ func (l *listener) statement() (stmt.Statement, error) {
 		return l.metricMetadataStmt.build()
 	case l.stateStmt != nil:
 		return l.stateStmt.build()
+	case l.requestStmt != nil:
+		return l.requestStmt.build()
 	default:
 		return nil, nil
 	}

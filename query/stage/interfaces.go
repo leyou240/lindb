@@ -17,13 +17,12 @@
 
 package stage
 
+import "github.com/lindb/lindb/models"
+
 //go:generate mockgen -source=./interfaces.go -destination=./interfaces_mock.go -package=stage
 
 // Type represents the type of stage.
 type Type int
-
-// State represents the state of stage.
-type State int
 
 const (
 	// Unknown represents unknown stage.
@@ -40,17 +39,6 @@ const (
 	MetadataSuggest
 	// ShardLookup represents shard lookup stage.
 	ShardLookup
-)
-
-const (
-	// UnknownState represents unknown stage state.
-	UnknownState State = iota
-	// ExecutingState represents stage is executing.
-	ExecutingState
-	// FinishState represents stage completed successfully.
-	FinishState
-	// ErrorState represents stage completed with error.
-	ErrorState
 )
 
 // String returns string value of stage type.
@@ -75,6 +63,10 @@ func (t Type) String() string {
 
 // Stage represents stage under execute pipeline.
 type Stage interface {
+	// Identifier returns identifier value of current stage.
+	Identifier() string
+	// Stats returns the execution stats of current stage.
+	Stats() []*models.OperatorStats
 	// Type returns the type of stage.
 	Type() Type
 	// Plan plans sub execute tree for this stage.
@@ -85,4 +77,6 @@ type Stage interface {
 	Execute(node PlanNode, completeHandle func(), errHandle func(err error))
 	// Complete completes this stage, does some resource release operate.
 	Complete()
+	// IsAsync returns stage if stage async execute.
+	IsAsync() bool
 }

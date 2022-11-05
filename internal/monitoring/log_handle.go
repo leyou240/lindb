@@ -22,14 +22,25 @@ import (
 	"io"
 	"os"
 	"path"
+	"strings"
 
 	"github.com/gin-gonic/gin"
 
 	"github.com/lindb/lindb/constants"
-	"github.com/lindb/lindb/pkg/fileutil"
 	httppkg "github.com/lindb/lindb/pkg/http"
 	"github.com/lindb/lindb/pkg/logger"
 )
+
+// for testing
+var (
+	readDirFn = os.ReadDir
+)
+
+// FileInfo represents file info include name/size.
+type FileInfo struct {
+	Name string `json:"name"`
+	Size int64  `json:"size"`
+}
 
 var (
 	LogListPath = "/log/list"
@@ -57,23 +68,57 @@ func (d *LoggerAPI) Register(route gin.IRoutes) {
 }
 
 // List returns all log files in log dir.
+
+// @Summary list log files
+// @Description return all log files in log dir.
+// @Tags State
+// @Accept json
+// @Produce json
+// @Success 200 {object} object
+// @Failure 404 {string} string "not found"
+// @Failure 500 {string} string "internal error"
+// @Router /log/list [get]
 func (d *LoggerAPI) List(c *gin.Context) {
-	logFiles, err := fileutil.ListDir(d.logDir)
+	files, err := readDirFn(d.logDir)
 	if err != nil {
 		httppkg.Error(c, err)
 		return
+	}
+	var logFiles []FileInfo
+	for _, file := range files {
+		name := file.Name()
+		if strings.HasSuffix(name, ".log") {
+			fileInfo, err := file.Info()
+			if err != nil {
+				httppkg.Error(c, err)
+				return
+			}
+			logFiles = append(logFiles, FileInfo{
+				Name: name,
+				Size: fileInfo.Size(),
+			})
+		}
 	}
 	httppkg.OK(c, logFiles)
 }
 
 // View tails the log file, return the last n lines.
+// @Summary tail log file
+// @Description return last N lines in log file.
+// @Tags State
+// @Accept json
+// @Produce plain
+// @Success 200 {string} string
+// @Failure 404 {string} string "not found"
+// @Failure 500 {string} string "internal error"
+// @Router /log/view [get]
 func (d *LoggerAPI) View(c *gin.Context) {
 	var param struct {
 		FileName string `form:"file" binding:"required"`
 		// default: read last 1MB data from log file
 		Size int64 `form:"size,default=1048576"`
 	}
-	err := c.ShouldBind(&param)
+	err := c.ShouldBindQuery(&param)
 	if err != nil {
 		httppkg.Error(c, err)
 		return

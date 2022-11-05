@@ -16,8 +16,11 @@ KIND, either express or implied.  See the License for the
 specific language governing permissions and limitations
 under the License.
 */
-import axios, { AxiosResponse } from "axios";
+import axios from "axios";
 import qs from "qs";
+import * as _ from "lodash-es";
+import JSONbig from "json-bigint";
+
 // env control
 switch (import.meta.env.MODE) {
   case "development":
@@ -30,8 +33,21 @@ switch (import.meta.env.MODE) {
 }
 axios.defaults.timeout = 60000; // set timeout
 axios.defaults.headers.common["Content-Type"] = "application/json";
+axios.defaults.transformResponse = [
+  (data) => {
+    if (typeof data === "string") {
+      try {
+        data = JSONbig.parse(data);
+        return data;
+      } catch (e) {
+        /* Ignore */
+      } // Added this Ignore as it's the same in the Axios
+    }
+    return data;
+  },
+];
 
-export async function GET<T>(
+async function GET<T>(
   url: string,
   params?: { [index: string]: any } | undefined
 ): Promise<T> {
@@ -47,7 +63,7 @@ export async function GET<T>(
     });
 }
 
-export async function POST<T>(
+async function POST<T>(
   url: string,
   params?: { [index: string]: any } | undefined
 ): Promise<T> {
@@ -60,3 +76,18 @@ export async function POST<T>(
       return Promise.reject(err);
     });
 }
+
+const getErrorMsg = (err: any) => {
+  return _.get(err, "response.data", "Unknown internal error");
+};
+
+const getErrorCode = (err: any) => {
+  return _.get(err, "response.status", 0);
+};
+
+export default {
+  getErrorMsg,
+  getErrorCode,
+  GET,
+  POST,
+};

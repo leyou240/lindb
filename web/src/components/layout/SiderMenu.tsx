@@ -17,21 +17,25 @@ specific language governing permissions and limitations
 under the License.
 */
 import { Layout, Nav, Space } from "@douyinfe/semi-ui";
-import Logo from "@src/assets/logo_dark.svg";
-import { defaultOpenKeys, menus, routeMap } from "@src/configs";
+import DarkLogo from "@src/assets/logo_dark.svg";
+import Logo from "@src/assets/logo.svg";
 import { useWatchURLChange } from "@src/hooks";
 import { URLStore } from "@src/stores";
 import * as _ from "lodash-es";
-import React, { useState } from "react";
+import React, { useState, useContext } from "react";
+import { UIContext } from "@src/context/UIContextProvider";
+import { RouteItem } from "@src/models";
 const { Sider } = Layout;
 
-export type SiderMenuProps = {
+const SiderMenu: React.FC<{
   defaultOpenAll?: boolean;
-};
-
-export default function SiderMenu(props: SiderMenuProps) {
-  const { defaultOpenAll } = props;
+  openKeys: string[];
+  routes: Map<string, RouteItem>;
+  menus: RouteItem[];
+}> = (props) => {
+  const { defaultOpenAll, routes, menus, openKeys } = props;
   const [selectedKeys, setSelectedKeys] = useState([] as string[]);
+  const { isDark, collapsed, toggleCollapse } = useContext(UIContext);
 
   useWatchURLChange(() => {
     const path = URLStore.path;
@@ -53,9 +57,20 @@ export default function SiderMenu(props: SiderMenuProps) {
   });
 
   return (
-    <Sider>
+    <Sider
+    // conflict local setting
+    // breakpoint={["lg"]}
+    // onBreakpoint={(_screen, bool) => {
+    //   UIStore.setSidebarCollapse(!bool);
+    // }}
+    >
       <Nav
-        defaultOpenKeys={defaultOpenAll ? defaultOpenKeys : []}
+        className="lin-nav"
+        defaultOpenKeys={defaultOpenAll ? openKeys : []}
+        subNavMotion={false}
+        limitIndent={false}
+        isCollapsed={collapsed}
+        onCollapseChange={() => toggleCollapse()}
         style={{
           maxWidth: 220,
           height: "100%",
@@ -63,7 +78,7 @@ export default function SiderMenu(props: SiderMenuProps) {
         items={menus as any[]}
         selectedKeys={selectedKeys}
         onClick={(data) => {
-          const item = routeMap.get(`${data.itemKey}`);
+          const item = routes.get(`${data.itemKey}`);
           const needClearKeys = _.pullAll(
             URLStore.getParamKeys(),
             _.get(item, "keep", [])
@@ -76,8 +91,8 @@ export default function SiderMenu(props: SiderMenuProps) {
         header={{
           logo: (
             <img
-              src={Logo}
-              style={{ width: 48, height: 48, marginLeft: 8, marginRight: 8 }}
+              src={isDark() ? DarkLogo : Logo}
+              style={{ width: 48, height: 48, marginRight: 8 }}
             />
           ),
           text: (
@@ -97,7 +112,12 @@ export default function SiderMenu(props: SiderMenuProps) {
           ),
           style: { paddingTop: 12, paddingBottom: 12, paddingLeft: 2 },
         }}
+        footer={{
+          collapseButton: true,
+        }}
       />
     </Sider>
   );
-}
+};
+
+export default SiderMenu;

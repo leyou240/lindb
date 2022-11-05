@@ -18,7 +18,8 @@
 package http
 
 // @title LinDB Open API
-// @version 2.0
+// @version 1.0
+// @description LinDB Open API
 
 // @contact.name API Support
 // @contact.url https://lindb.io
@@ -26,5 +27,6 @@ package http
 // @license.name Apache 2.0
 // @license.url http://www.apache.org/licenses/LICENSE-2.0.html
 
+// @Host http://localhost:9000
 // @BasePath /api/v1
 // @schemes http

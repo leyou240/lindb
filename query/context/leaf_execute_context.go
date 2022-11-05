@@ -18,13 +18,17 @@
 package context
 
 import (
+	"time"
+
 	"go.uber.org/atomic"
 
 	"github.com/lindb/lindb/flow"
 	"github.com/lindb/lindb/models"
+	"github.com/lindb/lindb/pkg/encoding"
 	"github.com/lindb/lindb/pkg/logger"
 	"github.com/lindb/lindb/pkg/timeutil"
 	protoCommonV1 "github.com/lindb/lindb/proto/gen/v1/common"
+	trackerpkg "github.com/lindb/lindb/query/tracker"
 	"github.com/lindb/lindb/rpc"
 	"github.com/lindb/lindb/sql/stmt"
 	"github.com/lindb/lindb/tsdb"
@@ -37,6 +41,7 @@ var (
 // LeafExecuteContext represents leaf node execution context.
 type LeafExecuteContext struct {
 	TaskCtx  *flow.TaskContext
+	Tracker  *trackerpkg.StageTracker
 	LeafNode *models.Leaf
 
 	StorageExecuteCtx *flow.StorageExecuteContext
@@ -53,6 +58,7 @@ type LeafExecuteContext struct {
 
 // NewLeafExecuteContext creates a LeafExecuteContext instance.
 func NewLeafExecuteContext(taskCtx *flow.TaskContext,
+	tracker *trackerpkg.StageTracker,
 	queryStmt *stmt.Query,
 	req *protoCommonV1.TaskRequest,
 	serverFactory rpc.TaskServerFactory,
@@ -66,6 +72,7 @@ func NewLeafExecuteContext(taskCtx *flow.TaskContext,
 	}
 	ctx := &LeafExecuteContext{
 		TaskCtx:           taskCtx,
+		Tracker:           tracker,
 		LeafNode:          leafNode,
 		StorageExecuteCtx: storageExecuteCtx,
 		Database:          database,
@@ -78,16 +85,32 @@ func NewLeafExecuteContext(taskCtx *flow.TaskContext,
 }
 
 // waitCollectGroupingTagsCompleted waits collect grouping tag value tasks completed.
-func (ctx *LeafExecuteContext) waitCollectGroupingTagsCompleted() error {
+func (ctx *LeafExecuteContext) waitCollectGroupingTagsCompleted() (err error) {
+	if ctx.StorageExecuteCtx.Query.HasGroupBy() {
+		defer func() {
+			ctx.Tracker.SetGroupingCollectStageValues(func(stageStats *models.StageStats) {
+				stageStats.End = time.Now().UnixNano()
+				stageStats.Cost = stageStats.End - stageStats.Start
+				if err != nil {
+					stageStats.ErrMsg = err.Error()
+					stageStats.State = trackerpkg.ErrorState.String()
+				}
+				if stageStats.ErrMsg == "" {
+					stageStats.State = trackerpkg.CompleteState.String()
+				}
+			})
+		}()
+	}
 	if ctx.StorageExecuteCtx.HasGroupingTagValueIDs() {
 		// if it has grouping tag value ids, need wait collect group by tag values completed
 		select {
 		case <-ctx.TaskCtx.Ctx.Done():
-			return ctx.TaskCtx.Ctx.Err()
+			err = ctx.TaskCtx.Ctx.Err()
+			return
 		case <-ctx.GroupingCtx.collectGroupingTagsCompleted:
 		}
 	}
-	return nil
+	return
 }
 
 // SendResponse sends lead node execute response, if with err sends error msg, else sends result set.
@@ -106,7 +129,11 @@ func (ctx *LeafExecuteContext) SendResponse(err error) {
 			return
 		}
 
+		// build result set
 		resultSet := ctx.ReduceCtx.BuildResultSet(ctx.LeafNode)
+		// complete stats track
+		ctx.Tracker.Complete()
+
 		ctx.sendResponse(resultSet, nil)
 	}
 }
@@ -115,6 +142,9 @@ func (ctx *LeafExecuteContext) SendResponse(err error) {
 func (ctx *LeafExecuteContext) sendResponse(resultData [][]byte, err error) {
 	var stats []byte
 	var errMsg string
+	if ctx.StorageExecuteCtx.Query.Explain {
+		stats = encoding.JSONMarshal(ctx.Tracker.GetStats())
+	}
 	if err != nil {
 		errMsg = err.Error()
 	}

@@ -15,10 +15,10 @@
 // specific language governing permissions and limitations
 // under the License.
 
-// Code generated from /Users/huangjie/go/src/github.com/lindb/lindb/sql/grammar/SQL.g4 by ANTLR 4.10.1. DO NOT EDIT.
+// Code generated from java-escape by ANTLR 4.11.1. DO NOT EDIT.
 
 package grammar // SQL
-import "github.com/antlr/antlr4/runtime/Go/antlr"
+import "github.com/antlr/antlr4/runtime/Go/antlr/v4"
 
 type BaseSQLVisitor struct {
 	*antlr.BaseParseTreeVisitor
@@ -37,6 +37,14 @@ func (v *BaseSQLVisitor) VisitShowStmt(ctx *ShowStmtContext) interface{} {
 }
 
 func (v *BaseSQLVisitor) VisitShowMasterStmt(ctx *ShowMasterStmtContext) interface{} {
+	return v.VisitChildren(ctx)
+}
+
+func (v *BaseSQLVisitor) VisitShowRequestsStmt(ctx *ShowRequestsStmtContext) interface{} {
+	return v.VisitChildren(ctx)
+}
+
+func (v *BaseSQLVisitor) VisitShowRequestStmt(ctx *ShowRequestStmtContext) interface{} {
 	return v.VisitChildren(ctx)
 }
 
@@ -65,6 +73,10 @@ func (v *BaseSQLVisitor) VisitShowAliveStmt(ctx *ShowAliveStmtContext) interface
 }
 
 func (v *BaseSQLVisitor) VisitShowReplicationStmt(ctx *ShowReplicationStmtContext) interface{} {
+	return v.VisitChildren(ctx)
+}
+
+func (v *BaseSQLVisitor) VisitShowMemoryDatabaseStmt(ctx *ShowMemoryDatabaseStmtContext) interface{} {
 	return v.VisitChildren(ctx)
 }
 
@@ -129,6 +141,10 @@ func (v *BaseSQLVisitor) VisitNamespace(ctx *NamespaceContext) interface{} {
 }
 
 func (v *BaseSQLVisitor) VisitDatabaseName(ctx *DatabaseNameContext) interface{} {
+	return v.VisitChildren(ctx)
+}
+
+func (v *BaseSQLVisitor) VisitRequestID(ctx *RequestIDContext) interface{} {
 	return v.VisitChildren(ctx)
 }
 
