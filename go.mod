@@ -4,7 +4,6 @@ go 1.18
 
 require (
 	github.com/BurntSushi/toml v1.1.0
-	github.com/alecthomas/template v0.0.0-20190718012654-fb15b899a751
 	github.com/antlr/antlr4/runtime/Go/antlr/v4 v4.0.0-20220911224424-aa1f1f12a846
 	github.com/c-bata/go-prompt v0.2.6
 	github.com/cespare/xxhash/v2 v2.1.2
@@ -48,7 +47,7 @@ require (
 	go.uber.org/automaxprocs v1.5.1
 	go.uber.org/zap v1.21.0
 	golang.org/x/sys v0.0.0-20220615213510-4f61da869c0c
-	google.golang.org/grpc v1.48.0
+	google.golang.org/grpc v1.50.1
 	gopkg.in/natefinch/lumberjack.v2 v2.0.0
 )
 
