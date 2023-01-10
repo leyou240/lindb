@@ -4,7 +4,6 @@ go 1.18
 
 require (
 	github.com/BurntSushi/toml v1.1.0
-	github.com/alecthomas/template v0.0.0-20190718012654-fb15b899a751
 	github.com/antlr/antlr4/runtime/Go/antlr/v4 v4.0.0-20220911224424-aa1f1f12a846
 	github.com/c-bata/go-prompt v0.2.6
 	github.com/cespare/xxhash/v2 v2.1.2
@@ -26,7 +25,7 @@ require (
 	github.com/google/uuid v1.1.2
 	github.com/grpc-ecosystem/go-grpc-middleware v1.3.0
 	github.com/hashicorp/go-multierror v1.1.1
-	github.com/jedib0t/go-pretty/v6 v6.3.2
+	github.com/jedib0t/go-pretty/v6 v6.4.4
 	github.com/json-iterator/go v1.1.12
 	github.com/klauspost/compress v1.15.6
 	github.com/lindb/common v0.0.1
